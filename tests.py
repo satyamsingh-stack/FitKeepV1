@@ -1,7 +1,9 @@
 """
 Tests for the Gym Retention & Attendance SaaS platform.
 """
-from django.test import TestCase
+import re
+
+from django.test import Client, TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
@@ -65,6 +67,25 @@ class NotFoundPageTests(TestCase):
             'Using the URLconf defined in config.urls',
             status_code=404,
         )
+
+
+class CsrfProtectionTests(TestCase):
+    def test_login_form_renders_token_accepted_by_csrf_middleware(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.get(reverse('login'))
+        token_match = re.search(
+            rb'name="csrfmiddlewaretoken" value="([^"]+)"',
+            response.content,
+        )
+
+        self.assertIsNotNone(token_match)
+        post_response = client.post(reverse('login'), {
+            'csrfmiddlewaretoken': token_match.group(1).decode(),
+            'username': 'unknown-user',
+            'password': 'invalid-password',
+        })
+
+        self.assertEqual(post_response.status_code, 200)
 
 
 class AttendanceServiceTests(TestCase):

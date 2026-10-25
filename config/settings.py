@@ -20,22 +20,23 @@ if not SECRET_KEY:
 if not DEBUG and (SECRET_KEY.startswith('replace-this') or SECRET_KEY.startswith('django-insecure')):
     raise ImproperlyConfigured('Replace the example SECRET_KEY before production deployment.')
 
-NGROK_DOMAIN = os.environ.get('NGROK_DOMAIN', 'paragogic-grant-noninternational.ngrok-free.dev').strip()
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
+    for host in os.environ.get(
+        'ALLOWED_HOSTS',
+        'localhost,127.0.0.1,testserver,satyamsingh9137700478.pythonanywhere.com'
+    ).split(',')
     if host.strip()
 ]
-if NGROK_DOMAIN:
-    ALLOWED_HOSTS.append(NGROK_DOMAIN)
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://satyamsingh9137700478.pythonanywhere.com'
+    ).split(',')
     if origin.strip()
 ]
-if NGROK_DOMAIN:
-    CSRF_TRUSTED_ORIGINS.append(f'https://{NGROK_DOMAIN}')
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
@@ -79,6 +80,7 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
+                'django.template.context_processors.csrf',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
