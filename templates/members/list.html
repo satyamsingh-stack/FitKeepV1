@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Members{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-heading"><div><div class="eyebrow">Member directory</div><h1>Members</h1><p>Manage profiles, membership status, and contact details.</p></div>
+        <a href="{% url 'member_add' %}" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i> Add member</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" name="search" class="form-control" placeholder="Search by name, member ID, phone, or email" value="{{ search }}">
+                </div>
+                <div class="col-md-2">
+                    <select name="membership" class="form-select" aria-label="Membership">
+                        <option value="">Any membership</option>
+                        <option value="active" {% if membership_filter == 'active' %}selected{% endif %}>Currently valid</option>
+                        <option value="expiring" {% if membership_filter == 'expiring' %}selected{% endif %}>Expiring in 7 days</option>
+                        <option value="expired" {% if membership_filter == 'expired' %}selected{% endif %}>Expired / not valid</option>
+                        <option value="due" {% if membership_filter == 'due' %}selected{% endif %}>Has fees due</option>
+                        <option value="none" {% if membership_filter == 'none' %}selected{% endif %}>No membership yet</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for choice in status_choices %}
+                        <option value="{{ choice.0 }}" {% if status_filter == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-outline-primary w-100">Go</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Member ID</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                    <th>Membership</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member in members %}
+                <tr>
+                    <td><span class="small fw-semibold">{{ member.member_id }}</span></td>
+                    <td><div class="d-flex align-items-center"><span class="member-avatar">{{ member.full_name|slice:':1'|upper }}</span><span><strong class="member-name">{{ member.full_name }}</strong><span class="member-meta">{{ member.email|default:"No email added" }}</span></span></div></td>
+                    <td>{{ member.phone }}</td>
+                    <td><span class="badge bg-{% if member.status == 'active' %}success{% elif member.status == 'inactive' %}secondary{% elif member.status == 'paused' %}warning{% else %}danger{% endif %}">{{ member.status }}</span></td>
+                    <td>
+                        {% if member.current_sub %}
+                            <span class="badge bg-{% if member.current_sub.status == 'active' %}success{% elif member.current_sub.status == 'pending' %}info{% else %}secondary{% endif %}">{{ member.current_sub.status }}</span>
+                            <span class="small text-muted d-block">{{ member.current_sub.plan.name|default:"Custom" }} &middot; till {{ member.current_sub.end_date|date:"d M Y" }}</span>
+                        {% else %}
+                            <a href="{% url 'subscription_add' %}?member={{ member.pk }}" class="small">Assign membership</a>
+                        {% endif %}
+                    </td>
+                    <td class="text-nowrap">
+                        {% if member.phone %}
+                            <a href="tel:{{ member.phone }}" class="btn btn-sm btn-outline-secondary" title="Call member"><i class="bi bi-telephone"></i></a>
+                            <a href="https://wa.me/{{ member.phone }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success" title="WhatsApp member"><i class="bi bi-whatsapp"></i></a>
+                        {% endif %}
+                        <form method="post" action="{% url 'member_check_in' member.member_id %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-sm btn-outline-success" title="Mark present today"><i class="bi bi-person-check"></i></button></form>
+                        {% if member.current_sub %}<a href="{% url 'subscription_renew' member.current_sub.id %}" class="btn btn-sm btn-outline-success" title="Renew membership"><i class="bi bi-arrow-repeat"></i></a>{% endif %}
+                        <a href="{% url 'payment_add' %}?member={{ member.member_id }}" class="btn btn-sm btn-outline-success" title="Record payment"><i class="bi bi-cash"></i></a>
+                        <a href="{% url 'member_detail' member.member_id %}" class="btn btn-sm btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
+                        <a href="{% url 'member_edit' member.member_id %}" class="btn btn-sm btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center">No members found. <a href="{% url 'member_add' %}">Add a member</a></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if members.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination">
+            {% if members.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ members.previous_page_number }}&amp;search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;membership={{ membership_filter }}">&laquo;</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ members.number }} of {{ members.paginator.num_pages }}</span></li>
+            {% if members.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ members.next_page_number }}&amp;search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;membership={{ membership_filter }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Outstanding Payments{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-exclamation-triangle"></i> Outstanding Payments</h2>
+    <div class="table-responsive mt-4">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Subscription</th>
+                    <th>Outstanding Amount</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in outstanding %}
+                <tr>
+                    <td>{{ item.member.full_name }}</td>
+                    <td>{{ item.subscription.plan.name|default:"Custom" }}</td>
+                    <td>₹{{ item.outstanding }}</td>
+                    <td>
+                        <a href="{% url 'payment_add' %}?member={{ item.member.member_id }}&amp;subscription_id={{ item.subscription.id }}" class="btn btn-sm btn-success"><i class="bi bi-cash"></i> Record Payment</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-success">No outstanding payments!</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

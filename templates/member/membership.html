@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Membership{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-box-seam"></i> My Membership</h2>
+    {% if subscription %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5>{{ subscription.plan.name|default:"Custom Plan" }}</h5>
+            <p><strong>Start Date:</strong> {{ subscription.start_date }}</p>
+            <p><strong>End Date:</strong> {{ subscription.end_date }}</p>
+            <p><strong>Status:</strong> <span class="badge bg-success">{{ subscription.status }}</span></p>
+            <p><strong>Days Remaining:</strong> {{ subscription.days_remaining }}</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="card mt-4">
+        <div class="card-body text-center text-muted">
+            <p>No active subscription.</p>
+            <a href="#" class="btn btn-primary">Contact Gym to Subscribe</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

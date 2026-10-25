@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Features - Gym Platform{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <h1 class="text-center fw-bold mb-2">Features</h1>
+  <p class="text-center text-muted mb-5">Everything you need to run and grow your gym.</p>
+  <div class="row g-4">
+    {% for f in features_list %}
+    {% empty %}
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Member Management</h5>
+          <p class="text-muted">Add, edit, and track members with detailed profiles.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Membership Plans</h5>
+          <p class="text-muted">Create plans and manage subscriptions and renewals.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Attendance Tracking</h5>
+          <p class="text-muted">QR check-ins, history, and attendance reports.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Payments</h5>
+          <p class="text-muted">Record payments, track outstanding dues, and fees.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Retention</h5>
+          <p class="text-muted">Identify at-risk members and log contact outreach.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex">
+        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
+        <div>
+          <h5>Reports & Audit</h5>
+          <p class="text-muted">Dashboards, reports, notifications, and audit history.</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

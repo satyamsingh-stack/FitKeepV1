@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}{% if plan %}Edit Plan{% else %}Add Plan{% endif %}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-plus-lg"></i> {% if plan %}Edit Membership Plan{% else %}Add Membership Plan{% endif %}</h2>
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Plan Name</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Duration</label>
+                                {{ form.duration }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Duration (days)</label>
+                                {{ form.duration_days }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price (₹)</label>
+                            {{ form.price }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            {{ form.description }}
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.is_active }} <label class="form-check-label">Active</label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">{% if plan %}Save changes{% else %}Create Plan{% endif %}</button>
+                        <a href="{% url 'plan_list' %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+// Choosing a duration fills in the number of days, so the admin only has to type a price.
+const durationDays={monthly:30,quarterly:90,half_yearly:180,annual:365};
+const durSel=document.getElementById('id_duration'),daysField=document.getElementById('id_duration_days');
+durSel.addEventListener('change',function(){if(durationDays[this.value])daysField.value=durationDays[this.value];});
+</script>{% endblock %}

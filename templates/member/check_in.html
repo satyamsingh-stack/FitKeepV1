@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Check in · {{ gym.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center py-4">
+    <div class="col-lg-6 col-xl-5">
+        <div class="card">
+            <div class="card-body p-4 p-lg-5 text-center">
+                <div class="metric-icon mx-auto mb-3"><i class="bi bi-qr-code-scan"></i></div>
+                <div class="eyebrow">Welcome to {{ gym.name }}</div>
+                <h1 class="h2">Check in for today</h1>
+                <p class="mb-4">Enter your registered phone number or check in with your signed-in member account.</p>
+                <form id="checkinForm" method="post" class="text-start">
+                    {% csrf_token %}
+                    <input type="hidden" name="qr_token" value="{{ qr_token }}">
+                    <label class="form-label" for="phone">Registered phone number</label>
+                    <input id="phone" type="tel" name="phone" class="form-control mb-3"
+                           value="{{ member.phone|default:'' }}" placeholder="Your registered phone number"
+                           {% if not is_authenticated_member %}required{% endif %}>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-circle me-2"></i>Mark my attendance
+                    </button>
+                </form>
+                {% if not is_authenticated_member %}
+                <p class="small mt-3 mb-0">Prefer to sign in? <a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Sign in to your member account</a>.</p>
+                {% endif %}
+                <div id="checkinResult" class="mt-3 text-start" aria-live="polite"></div>
+                <p class="small text-muted mt-3 mb-0"><i class="bi bi-shield-lock me-1"></i>Your phone number must match an active membership at this gym.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('checkinForm').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const result = document.getElementById('checkinResult');
+    const button = this.querySelector('button');
+    button.disabled = true;
+    try {
+        const response = await fetch('{% url "member:check_in" %}', {
+            method: 'POST',
+            headers: {'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value},
+            body: new FormData(this)
+        });
+        const data = await response.json();
+        if (data.summary_url) {
+            window.location.assign(data.summary_url);
+            return;
+        }
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Unable to check in.');
+        }
+
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success';
+        const heading = document.createElement('strong');
+        heading.textContent = 'Attendance marked!';
+        alert.appendChild(heading);
+        const message = document.createElement('div');
+        message.className = 'small mt-1';
+        message.textContent = data.message;
+        alert.appendChild(message);
+        const summary = document.createElement('div');
+        summary.className = 'small mt-2';
+        summary.textContent = `Today's attendance: ${data.today_status} · Current streak: ${data.current_streak} days · This month's visits: ${data.monthly_visits}`;
+        alert.appendChild(summary);
+        result.replaceChildren(alert);
+    } catch (error) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger';
+        alert.textContent = error.message;
+        result.replaceChildren(alert);
+    } finally {
+        button.disabled = false;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Attendance summary · {{ gym.name }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">{{ gym.name }} · Your consistency</div>
+        <h1>Great work, {{ member.full_name }}!</h1>
+        <p>Your attendance is recorded for today. Keep building your streak.</p>
+    </div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="eyebrow"><i class="bi bi-fire me-1"></i>Current streak</div>
+                <div class="display-5 fw-bold">{{ streak_data.current_streak }} days</div>
+                <p class="text-muted mb-0">{% if streak_data.streak_active %}Your streak is active.{% else %}Check in again tomorrow to start a streak.{% endif %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="eyebrow"><i class="bi bi-trophy me-1"></i>Longest streak</div>
+                <div class="display-5 fw-bold">{{ streak_data.longest_streak }} days</div>
+                <p class="text-muted mb-0">Your personal attendance record.</p>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar2-week me-2 text-primary"></i>{{ calendar_month|date:'F Y' }}</span>
+                <span class="badge text-bg-success">{{ attendance_dates|length }} recorded days</span>
+            </div>
+            <div class="card-body">
+                <div class="calendar-grid mb-2">
+                    <div class="calendar-weekday">MON</div><div class="calendar-weekday">TUE</div>
+                    <div class="calendar-weekday">WED</div><div class="calendar-weekday">THU</div>
+                    <div class="calendar-weekday">FRI</div><div class="calendar-weekday">SAT</div>
+                    <div class="calendar-weekday">SUN</div>
+                    {% for day in calendar_days %}
+                    <div class="calendar-day {% if day.date in attendance_dates %}attended{% endif %}{% if day.is_today %} today{% endif %}"
+                         title="{% if day.date %}{{ day.date|date:'M j, Y' }}{% endif %}">
+                        {% if day.date %}{{ day.date.day }}{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex gap-3 align-items-center small text-muted mt-3">
+                    <span><span class="d-inline-block rounded-2 me-1" style="width:10px;height:10px;background:#dff8ec"></span>Attended</span>
+                    <span><span class="d-inline-block rounded-2 me-1" style="width:10px;height:10px;background:#f6f7fb"></span>No visit recorded</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

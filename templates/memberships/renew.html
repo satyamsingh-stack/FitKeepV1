@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Renew membership{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">Membership management</div><h1>Renew membership</h1><p>Confirm the fee and record the payment in one step.</p></div>
+    <a href="{% url 'member_detail' subscription.member.member_id %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>{{ subscription.member.full_name }}</a></div>
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card"><div class="card-body p-4">
+            <div class="mb-3"><strong>{{ subscription.member.full_name }}</strong><div class="text-muted small">{{ subscription.plan.name|default:"Custom" }} &middot; current period ends {{ subscription.end_date|date:"d M Y" }}</div></div>
+            <div class="alert alert-info py-2"><i class="bi bi-calendar-check me-1"></i> New period: <strong>{{ new_start|date:"d M Y" }}</strong> to <strong>{{ new_end|date:"d M Y" }}</strong> (no gap, no overlap)</div>
+            <form method="POST">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="total_amount">Fee (&#8377;)</label><input class="form-control" id="total_amount" name="total_amount" type="number" min="0" step="0.01" value="{{ default_fee|stringformat:'.2f' }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="discount_amount">Discount (&#8377;)</label><input class="form-control" id="discount_amount" name="discount_amount" type="number" min="0" step="0.01" value="0"></div>
+                </div>
+                <hr>
+                <div class="btn-group mb-3 flex-wrap" role="group">
+                    <button type="button" class="btn btn-outline-success" data-pay="full"><i class="bi bi-check2-circle me-1"></i>Paid in full</button>
+                    <button type="button" class="btn btn-outline-secondary" data-pay="none"><i class="bi bi-clock me-1"></i>Pay later</button>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label" for="amount_paid">Amount received (&#8377;)</label><input class="form-control" id="amount_paid" name="amount_paid" type="number" min="0" step="0.01" value="0"></div>
+                    <div class="col-md-4"><label class="form-label" for="payment_method">Method</label><select class="form-select" id="payment_method" name="payment_method">{% for value,label in method_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                    <div class="col-md-4"><label class="form-label" for="reference_number">Reference</label><input class="form-control" id="reference_number" name="reference_number" maxlength="100"></div>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-success"><i class="bi bi-arrow-repeat me-1"></i>Confirm renewal</button>
+                    <a href="{% url 'subscription_list' %}" class="btn btn-light">Cancel</a>
+                </div>
+            </form>
+        </div></div>
+    </div>
+    <div class="col-lg-5"><div class="card"><div class="card-body"><table class="table table-sm mb-0">
+        <tr><td>Fee</td><td class="text-end" id="sumFee">&#8377;0</td></tr>
+        <tr><td>Discount</td><td class="text-end" id="sumDisc">&minus;&#8377;0</td></tr>
+        <tr><td class="fw-semibold">Amount due</td><td class="text-end fw-semibold" id="sumDue">&#8377;0</td></tr>
+        <tr><td>Received now</td><td class="text-end" id="sumPaid">&#8377;0</td></tr>
+        <tr><td class="fw-bold">Balance</td><td class="text-end fw-bold" id="sumBal">&#8377;0</td></tr>
+    </table></div></div></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+(function(){const $=id=>document.getElementById(id),fee=$('total_amount'),disc=$('discount_amount'),paid=$('amount_paid');let mode=null;
+const n=e=>{const v=parseFloat(e.value);return isNaN(v)?0:v;},m=x=>'\u20B9'+(Math.round(x*100)/100).toLocaleString('en-IN');
+function sum(){const due=Math.max(n(fee)-n(disc),0);$('sumFee').textContent=m(n(fee));$('sumDisc').textContent='\u2212'+m(n(disc));$('sumDue').textContent=m(due);$('sumPaid').textContent=m(n(paid));const b=$('sumBal');b.textContent=m(Math.max(due-n(paid),0));b.className='text-end fw-bold '+(due-n(paid)>0?'text-danger':'text-success');}
+document.querySelectorAll('[data-pay]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.pay;paid.value=mode==='full'?Math.max(n(fee)-n(disc),0):0;sum();}));
+[fee,disc].forEach(e=>e.addEventListener('input',()=>{if(mode==='full')paid.value=Math.max(n(fee)-n(disc),0);sum();}));paid.addEventListener('input',()=>{mode=null;sum();});sum();})();
+</script>{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Memberships{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-heading"><div><div class="eyebrow">Membership management</div><h1>Memberships</h1><p>Who is covered, until when, and who still owes a balance.</p></div>
+        <a href="{% url 'subscription_add' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Assign membership</a>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a href="{% url 'subscription_list' %}" class="btn btn-sm {% if not quick_filter and not status_filter %}btn-primary{% else %}btn-outline-primary{% endif %}">All</a>
+        <a href="{% url 'subscription_list' %}?filter=expiring" class="btn btn-sm {% if quick_filter == 'expiring' %}btn-warning{% else %}btn-outline-warning{% endif %}"><i class="bi bi-calendar2-week"></i> Expiring in 7 days</a>
+        <a href="{% url 'subscription_list' %}?filter=due" class="btn btn-sm {% if quick_filter == 'due' %}btn-danger{% else %}btn-outline-danger{% endif %}"><i class="bi bi-wallet2"></i> Fees due</a>
+        <a href="{% url 'subscription_list' %}?status=expired" class="btn btn-sm {% if status_filter == 'expired' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Expired</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-5"><input type="text" name="search" class="form-control" placeholder="Search by member name, phone or ID" value="{{ search }}"></div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for choice in status_choices %}
+                        <option value="{{ choice.0 }}" {% if status_filter == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2"><button type="submit" class="btn btn-outline-primary w-100">Filter</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr><th>Member</th><th>Plan</th><th>Valid</th><th>Status</th><th>Due</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                {% for sub in subscriptions %}
+                <tr>
+                    <td><a href="{% url 'member_detail' sub.member.member_id %}" class="fw-semibold text-decoration-none">{{ sub.member.full_name }}</a></td>
+                    <td>{{ sub.plan.name|default:"Custom" }}</td>
+                    <td>{{ sub.start_date|date:"d M Y" }} &rarr; {{ sub.end_date|date:"d M Y" }}{% if sub.status == 'active' %}<span class="small d-block {% if sub.days_left <= 7 %}text-warning{% else %}text-muted{% endif %}">{% if sub.days_left == 0 %}ends today{% else %}{{ sub.days_left }} day{{ sub.days_left|pluralize }} left{% endif %}</span>{% endif %}</td>
+                    <td><span class="badge bg-{% if sub.status == 'active' %}success{% elif sub.status == 'expired' %}secondary{% elif sub.status == 'cancelled' %}danger{% else %}warning{% endif %}">{{ sub.status }}</span></td>
+                    <td>{% if sub.balance > 0 %}<span class="text-danger fw-semibold">&#8377;{{ sub.balance }}</span>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
+                    <td class="text-nowrap">
+                        {% if sub.balance > 0 %}<a href="{% url 'payment_add' %}?member={{ sub.member.member_id }}&amp;subscription_id={{ sub.id }}" class="btn btn-sm btn-success" title="Collect payment"><i class="bi bi-cash"></i> Collect</a>{% endif %}
+                        <a href="{% url 'subscription_renew' sub.id %}" class="btn btn-sm btn-outline-success" title="Renew"><i class="bi bi-arrow-repeat"></i> Renew</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center">No memberships found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Membership Plans{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-box-seam"></i> Membership Plans</h2>
+        <a href="{% url 'plan_add' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Plan</a>
+    </div>
+
+    <div class="row g-4">
+        {% for plan in plans %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ plan.name }}</h5>
+                    <span class="badge bg-{% if plan.is_active %}success{% else %}secondary{% endif %}">{{ plan.is_active|yesno:'Active,Inactive' }}</span>
+                </div>
+                <div class="card-body">
+                    <h3 class="text-primary">₹{{ plan.price }}</h3>
+                    <p class="text-muted">{{ plan.duration_label }} ({{ plan.duration_days }} days)</p>
+                    <p>{{ plan.description|default:"No description" }}</p>
+                    <a href="{% url 'plan_edit' plan.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Edit plan</a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12"><p class="text-center text-muted">No plans created yet. <a href="{% url 'plan_add' %}">Create your first plan</a> &mdash; you can then pick it when adding members.</p></div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

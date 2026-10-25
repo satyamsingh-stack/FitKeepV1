@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}{% if member %}Edit Member{% else %}Add Member{% endif %}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-person-plus"></i> {% if member %}Edit Member{% else %}Add Member{% endif %}</h2>
+    <div class="row mt-4">
+        <div class="col-md-6">
+<div class="card shadow-lg" style="border-radius:1.25rem;overflow:hidden;">
+    <div class="card-header text-white" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:1.5rem;">
+        <h4 class="mb-0"><i class="bi bi-person-plus"></i> {% if member %}Edit Member{% else %}Add Member{% endif %}</h4>
+        <small>{% if member %}Update this member's details{% else %}Fill in the details to register a new member{% endif %}</small>
+    </div>
+    <div class="card-body p-4">
+                    <form method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Full Name</label>
+                            {{ form.full_name }}
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone</label>
+                                {{ form.phone }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Email</label>
+                                {{ form.email }}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Date of Birth</label>
+                                {{ form.date_of_birth }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Gender</label>
+                                {{ form.gender }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Emergency Contact</label>
+                            {{ form.emergency_contact }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Emergency Contact Name</label>
+                            {{ form.emergency_contact_name }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Address</label>
+                            {{ form.address }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Photo</label>
+                            {{ form.photo }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            {{ form.status }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            {{ form.notes }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">{% if member %}Save changes{% else %}Add Member{% endif %}</button>
+                        <a href="{% url 'member_list' %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

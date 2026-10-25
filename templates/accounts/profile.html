@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-person"></i> Profile</h2>
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" value="{{ user.username }}" disabled>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Email</label>
+                                <input type="email" name="email" class="form-control" value="{{ user.email }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone</label>
+                                <input type="text" name="phone" class="form-control" value="{{ user.phone }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Date of Birth</label>
+                            <input type="date" name="date_of_birth" class="form-control" value="{{ user.date_of_birth|date:'Y-m-d' }}">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Profile</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Change Password</div>
+                <div class="card-body">
+                    <a href="{% url 'password_change' %}" class="btn btn-outline-warning w-100">Change Password</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

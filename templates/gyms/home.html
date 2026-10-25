@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Gym Home{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-building"></i> {{ gym.name }}</h2>
+        <span class="badge bg-{% if user_role == 'owner' %}primary{% elif user_role == 'staff' %}info{% else %}secondary{% endif %} fs-6">{{ user_role|title }}</span>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-people"></i> Members</div>
+                <div class="card-body">
+                    <a href="{% url 'member_list' %}" class="btn btn-outline-primary w-100">Manage Members</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-box-arrow-in-right"></i> Attendance</div>
+                <div class="card-body">
+                    <a href="{% url 'attendance_home' %}" class="btn btn-outline-success w-100">View Attendance</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-shield-exclamation"></i> Retention</div>
+                <div class="card-body">
+                    <a href="{% url 'retention_list' %}" class="btn btn-outline-warning w-100">View At-Risk Members</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

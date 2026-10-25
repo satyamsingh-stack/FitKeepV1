@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}{{ member.full_name }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-person"></i> {{ member.full_name }}</h2>
+        <div class="d-flex flex-wrap gap-2">
+            {% if checked_in_today %}<span class="btn btn-outline-success disabled"><i class="bi bi-check2-circle"></i> Present today</span>{% else %}<form method="post" action="{% url 'member_check_in' member.member_id %}" class="d-inline">{% csrf_token %}<button type="submit" class="btn btn-outline-success"><i class="bi bi-person-check"></i> Mark present</button></form>{% endif %}
+            {% if latest_subscription %}<a href="{% url 'subscription_renew' latest_subscription.id %}" class="btn btn-success"><i class="bi bi-arrow-repeat"></i> Renew</a>{% endif %}
+            <a href="{% url 'subscription_add' %}?member={{ member.pk }}" class="btn btn-primary"><i class="bi bi-card-checklist"></i> {% if subscriptions %}New membership{% else %}Assign membership{% endif %}</a>
+            <a href="{% url 'payment_add' %}?member={{ member.member_id }}" class="btn btn-success"><i class="bi bi-cash"></i> Record payment</a>
+            <a href="{% url 'member_edit' member.member_id %}" class="btn btn-warning"><i class="bi bi-pencil"></i> Edit</a>
+        </div>
+    </div>
+
+    {% if total_due > 0 %}<div class="alert alert-warning d-flex justify-content-between align-items-center"><span><i class="bi bi-exclamation-triangle me-2"></i><strong>&#8377;{{ total_due }}</strong> is still due from this member.</span><a href="{% url 'payment_add' %}?member={{ member.member_id }}" class="btn btn-sm btn-success">Collect payment</a></div>{% endif %}
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Member Info</div>
+                <div class="card-body">
+                    <p><strong>Member ID:</strong> {{ member.member_id }}</p>
+                    <p><strong>Phone:</strong> {{ member.phone }}</p>
+                    <p><strong>Email:</strong> {{ member.email }}</p>
+                    <p><strong>Status:</strong> <span class="badge bg-{% if member.status == 'active' %}success{% else %}secondary{% endif %}">{{ member.status }}</span></p>
+                    <p><strong>Joined:</strong> {{ member.joined_at|date:"M d, Y" }}</p>
+                    <form method="post" action="{% url 'member_reset_password' member.member_id %}">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-secondary" data-confirm="Generate a new temporary portal password for this member?"><i class="bi bi-key"></i> Reset portal password</button></form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Attendance Summary</div>
+                <div class="card-body">
+                    <p><strong>Last Attendance:</strong> {{ member.last_attendance_date|date:"M d, Y" }}</p>
+                    <p><strong>Retention Risk:</strong> <span class="badge bg-{% if member.retention_risk_level == 'none' %}success{% elif member.retention_risk_level == 'early_warning' %}info{% elif member.retention_risk_level == 'at_risk' %}warning{% else %}danger{% endif %}">{{ member.retention_risk_level }}</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Subscription</div>
+                <div class="card-body">
+                    {% if subscriptions %}
+                        {% for sub in subscriptions %}
+                        <p><strong>{{ sub.plan.name|default:"Custom plan" }}</strong></p>
+                        <p>{{ sub.start_date }} to {{ sub.end_date }}</p>
+                        <p>Status: <span class="badge bg-{% if sub.status == 'active' %}success{% else %}secondary{% endif %}">{{ sub.status }}</span>{% if sub.outstanding_balance > 0 %} <span class="badge bg-danger">&#8377;{{ sub.outstanding_balance }} due</span>{% endif %}</p>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No membership yet.</p>
+                        <a href="{% url 'subscription_add' %}?member={{ member.pk }}" class="btn btn-sm btn-primary">Assign membership</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Recent Attendance</div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead><tr><th>Date</th><th>Time</th><th>Source</th></tr></thead>
+                        <tbody>
+                            {% for record in attendance_records %}
+                            <tr><td>{{ record.check_in_date }}</td><td>{{ record.check_in_at|time:"H:i" }}</td><td>{{ record.source }}</td></tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center">No attendance records</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Recent Payments</div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead><tr><th>Date</th><th>Amount</th><th>Method</th></tr></thead>
+                        <tbody>
+                            {% for payment in payments %}
+                            <tr><td>{{ payment.payment_date|date:"M d, Y" }}</td><td>₹{{ payment.amount }}</td><td>{{ payment.method }}</td></tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center">No payments</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

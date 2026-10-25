@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Gym Setup{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-gear"></i> Gym Setup Wizard</h2>
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Early Warning (days)</label>
+                                {{ form.inactivity_early_warning_days }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">At Risk (days)</label>
+                                {{ form.inactivity_at_risk_days }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">High Risk (days)</label>
+                                {{ form.inactivity_high_risk_days }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Critical Risk (days)</label>
+                                {{ form.inactivity_critical_risk_days }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Check-in Window (minutes)</label>
+                                {{ form.attendance_check_in_window_minutes }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Weekly Attendance Goal</label>
+                                {{ form.weekly_attendance_goal }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.allow_duplicate_daily_checkin }} <label class="form-check-label">Allow duplicate daily check-in</label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.require_phone_verification }} <label class="form-check-label">Require phone verification</label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.allow_manual_checkin }} <label class="form-check-label">Allow manual check-in</label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.auto_renew_enabled }} <label class="form-check-label">Enable auto-renewal</label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Complete Setup</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

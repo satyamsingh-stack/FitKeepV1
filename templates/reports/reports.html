@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-file-bar-graph"></i> Reports</h2>
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Attendance Report</div>
+                <div class="card-body">
+                    <a href="{% url 'attendance_report' %}" class="btn btn-outline-primary w-100">View Attendance Report</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Retention Report</div>
+                <div class="card-body">
+                    <a href="{% url 'retention_report' %}" class="btn btn-outline-warning w-100">View Retention Report</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Payment Summary</div>
+                <div class="card-body">
+                    <a href="{% url 'membership_fees' %}" class="btn btn-outline-info w-100">View Payment Summary</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

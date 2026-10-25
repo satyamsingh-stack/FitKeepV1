@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Attendance History{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2><i class="bi bi-list-ul"></i> Attendance History</h2>
+    <div class="card mt-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" name="member" class="form-control" placeholder="Search by member name" value="{{ member_filter }}">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="date" class="form-control" value="{{ date_filter }}">
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="table-responsive mt-4">
+        <table class="table table-striped">
+            <thead>
+                <tr><th>Member</th><th>Date</th><th>Time</th><th>Source</th></tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ record.member.full_name }}</td>
+                    <td>{{ record.check_in_date }}</td>
+                    <td>{{ record.check_in_at|time:"H:i" }}</td>
+                    <td>{{ record.source }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center">No attendance records</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

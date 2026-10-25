@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% block title %}Add member · FitKeep{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">New member</div>
+        <h1>Add a member</h1>
+        <p>Details, membership and first payment &mdash; all in one step.</p>
+    </div>
+    <a href="{% url 'member_list' %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>Members</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" id="onboardForm" novalidate>
+{% csrf_token %}
+{% if form.errors %}
+<div class="alert alert-danger"><strong>Please fix the highlighted fields.</strong>{% if form.non_field_errors %}<div>{{ form.non_field_errors }}</div>{% endif %}</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-xl-8">
+
+        <!-- 1. Member details -->
+        <div class="card mb-4">
+            <div class="card-header"><span class="badge text-bg-primary me-2">1</span>Who is joining?</div>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.full_name.id_for_label }}">Full name</label>
+                        {{ form.full_name }}{% for e in form.full_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.phone.id_for_label }}">Phone</label>
+                        {{ form.phone }}{% for e in form.phone.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        <div class="form-text">{{ form.phone.help_text }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.email.id_for_label }}">Email <span class="text-muted fw-normal">(optional)</span></label>
+                        {{ form.email }}{% for e in form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                </div>
+
+                <a class="d-inline-block mt-3 small fw-semibold" data-bs-toggle="collapse" href="#moreDetails" role="button" aria-expanded="{% if form.date_of_birth.errors or form.emergency_contact.errors or form.photo.errors %}true{% else %}false{% endif %}">
+                    <i class="bi bi-plus-circle me-1"></i>More details (date of birth, emergency contact, photo, notes)
+                </a>
+                <div class="collapse {% if form.date_of_birth.errors or form.emergency_contact.errors or form.photo.errors %}show{% endif %}" id="moreDetails">
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6"><label class="form-label">Date of birth</label>{{ form.date_of_birth }}{% for e in form.date_of_birth.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+                        <div class="col-md-6"><label class="form-label">Gender</label>{{ form.gender }}</div>
+                        <div class="col-md-6"><label class="form-label">Emergency contact name</label>{{ form.emergency_contact_name }}</div>
+                        <div class="col-md-6"><label class="form-label">Emergency contact phone</label>{{ form.emergency_contact }}{% for e in form.emergency_contact.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+                        <div class="col-12"><label class="form-label">Address</label>{{ form.address }}</div>
+                        <div class="col-md-6"><label class="form-label">Photo</label>{{ form.photo }}{% for e in form.photo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+                        <div class="col-md-6"><label class="form-label">Notes</label>{{ form.notes }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Membership -->
+        <div class="card mb-4">
+            <div class="card-header"><span class="badge text-bg-primary me-2">2</span>Which membership?</div>
+            <div class="card-body p-4">
+                {% if plans %}
+                <div class="row g-3" id="planChoices">
+                    {% for plan in plans %}
+                    <div class="col-sm-6 col-lg-4">
+                        <input type="radio" class="btn-check" name="plan" id="plan_{{ plan.id }}" value="{{ plan.id }}" autocomplete="off" {% if selected_plan|stringformat:'s' == plan.id|stringformat:'s' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary w-100 text-start p-3 h-100" for="plan_{{ plan.id }}">
+                            <span class="d-block fw-bold">{{ plan.name }}</span>
+                            <span class="d-block fs-5">&#8377;{{ plan.price }}</span>
+                            <span class="d-block small opacity-75">{{ plan.label }} &middot; {{ plan.days }} days</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                    <div class="col-sm-6 col-lg-4">
+                        <input type="radio" class="btn-check" name="plan" id="plan_none" value="" autocomplete="off" {% if not selected_plan %}checked{% endif %}>
+                        <label class="btn btn-outline-secondary w-100 text-start p-3 h-100" for="plan_none">
+                            <span class="d-block fw-bold">Custom / later</span>
+                            <span class="d-block small opacity-75">Enter your own fee &amp; dates, or skip the membership for now</span>
+                        </label>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-3">
+                    You haven't created any membership plans yet. <a href="{% url 'plan_add' %}" class="alert-link">Create a plan</a> to pick it here in one click, or enter a custom fee below.
+                </div>
+                <input type="radio" name="plan" value="" checked hidden>
+                {% endif %}
+                {% for e in form.plan.errors %}<div class="text-danger small mt-2">{{ e }}</div>{% endfor %}
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label" for="id_start_date">Starts on</label>
+                        {{ form.start_date }}{% for e in form.start_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="id_end_date">Valid until</label>
+                        {{ form.end_date }}{% for e in form.end_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="id_total_amount">Fee (&#8377;)</label>
+                        {{ form.total_amount }}{% for e in form.total_amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="id_discount_amount">Discount (&#8377;)</label>
+                        {{ form.discount_amount }}{% for e in form.discount_amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Payment -->
+        <div class="card mb-4" id="paymentCard">
+            <div class="card-header"><span class="badge text-bg-primary me-2">3</span>Payment received now</div>
+            <div class="card-body p-4">
+                <div class="btn-group mb-3 flex-wrap" role="group" aria-label="Payment shortcut">
+                    <button type="button" class="btn btn-outline-success" data-pay="full"><i class="bi bi-check2-circle me-1"></i>Paid in full</button>
+                    <button type="button" class="btn btn-outline-primary" data-pay="part"><i class="bi bi-pie-chart me-1"></i>Part payment</button>
+                    <button type="button" class="btn btn-outline-secondary" data-pay="none"><i class="bi bi-clock me-1"></i>Pay later</button>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="id_amount_paid">Amount received (&#8377;)</label>
+                        {{ form.amount_paid }}{% for e in form.amount_paid.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="id_payment_method">Method</label>
+                        {{ form.payment_method }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="id_reference_number">Reference <span class="text-muted fw-normal">(optional)</span></label>
+                        {{ form.reference_number }}
+                    </div>
+                </div>
+                <div class="form-text mt-2">Only enter what you have actually received. Any balance stays on the member's record as outstanding.</div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check2-circle me-1"></i>Add member</button>
+            <a href="{% url 'member_list' %}" class="btn btn-light btn-lg">Cancel</a>
+        </div>
+    </div>
+
+    <!-- Live summary -->
+    <div class="col-xl-4">
+        <div class="card" style="position:sticky;top:1rem;">
+            <div class="card-header"><i class="bi bi-receipt me-2"></i>Summary</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="small text-muted">Member</div>
+                    <strong id="sumName">&mdash;</strong>
+                </div>
+                <div class="mb-3">
+                    <div class="small text-muted">Membership</div>
+                    <strong id="sumPlan">None yet</strong>
+                    <div class="small text-muted" id="sumDates"></div>
+                </div>
+                <table class="table table-sm mb-0">
+                    <tr><td>Fee</td><td class="text-end" id="sumFee">&#8377;0</td></tr>
+                    <tr><td>Discount</td><td class="text-end" id="sumDiscount">&minus;&#8377;0</td></tr>
+                    <tr><td class="fw-semibold">Amount due</td><td class="text-end fw-semibold" id="sumDue">&#8377;0</td></tr>
+                    <tr><td>Received now</td><td class="text-end" id="sumPaid">&#8377;0</td></tr>
+                    <tr><td class="fw-bold">Balance</td><td class="text-end fw-bold" id="sumBalance">&#8377;0</td></tr>
+                </table>
+                <p class="small text-muted mt-3 mb-0"><i class="bi bi-person-lock me-1"></i>A member-portal login is created automatically. You'll see the temporary password after saving.</p>
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+{{ plans_json|json_script:"plansData" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const plans = {};
+  JSON.parse(document.getElementById('plansData').textContent).forEach(p => plans[String(p.id)] = p);
+  const $ = id => document.getElementById(id);
+  const f = { name: $('id_full_name'), start: $('id_start_date'), end: $('id_end_date'), fee: $('id_total_amount'),
+              disc: $('id_discount_amount'), paid: $('id_amount_paid') };
+  let payMode = null, endEdited = !!f.end.value;
+
+  const num = el => { const v = parseFloat(el.value); return isNaN(v) ? 0 : v; };
+  const money = n => '\u20B9' + (Math.round(n * 100) / 100).toLocaleString('en-IN');
+  const selectedPlan = () => { const r = document.querySelector('input[name="plan"]:checked'); return r && r.value ? plans[r.value] : null; };
+
+  function addDays(iso, days) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + days));
+    return dt.toISOString().slice(0, 10);
+  }
+  function fmt(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function applyPlan() {
+    const p = selectedPlan();
+    if (!p) return;
+    f.fee.value = p.price;
+    if (f.start.value && !endEdited) f.end.value = addDays(f.start.value, p.days - 1);
+    if (payMode === 'full') f.paid.value = Math.max(num(f.fee) - num(f.disc), 0);
+  }
+
+  function summary() {
+    const p = selectedPlan();
+    const fee = num(f.fee), disc = num(f.disc), due = Math.max(fee - disc, 0), paid = num(f.paid);
+    $('sumName').textContent = f.name.value.trim() || '\u2014';
+    $('sumPlan').textContent = p ? p.name : (fee > 0 || f.end.value ? 'Custom membership' : 'None yet');
+    $('sumDates').textContent = (f.start.value && f.end.value) ? fmt(f.start.value) + ' \u2192 ' + fmt(f.end.value) : '';
+    $('sumFee').textContent = money(fee);
+    $('sumDiscount').textContent = '\u2212' + money(disc);
+    $('sumDue').textContent = money(due);
+    $('sumPaid').textContent = money(paid);
+    const bal = $('sumBalance'); bal.textContent = money(Math.max(due - paid, 0));
+    bal.className = 'text-end fw-bold ' + (due - paid > 0 ? 'text-danger' : 'text-success');
+  }
+
+  document.querySelectorAll('input[name="plan"]').forEach(r => r.addEventListener('change', () => { endEdited = false; applyPlan(); summary(); }));
+  f.start.addEventListener('change', () => { if (selectedPlan() && !endEdited) applyPlan(); summary(); });
+  f.end.addEventListener('input', () => { endEdited = true; summary(); });
+  [f.name, f.fee, f.disc, f.paid].forEach(el => el.addEventListener('input', () => {
+    if ((el === f.fee || el === f.disc) && payMode === 'full') f.paid.value = Math.max(num(f.fee) - num(f.disc), 0);
+    if (el === f.paid) { payMode = null; document.querySelectorAll('[data-pay]').forEach(b => b.classList.remove('active')); }
+    summary();
+  }));
+
+  document.querySelectorAll('[data-pay]').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-pay]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    payMode = btn.dataset.pay;
+    if (payMode === 'full') f.paid.value = Math.max(num(f.fee) - num(f.disc), 0);
+    if (payMode === 'none') f.paid.value = 0;
+    if (payMode === 'part') { f.paid.focus(); f.paid.select(); }
+    summary();
+  }));
+
+  // First load: keep anything the server re-rendered (after an error); otherwise apply the preselected plan.
+  if (selectedPlan() && !f.fee.value) applyPlan();
+  summary();
+})();
+</script>
+{% endblock %}
