@@ -22,28 +22,33 @@ def create_notification(gym, recipient, notification_type, title, message, **rel
     )
 
 
-def notify_inactivity(member, gym, days_inactive, recipients):
+def notify_inactivity(member, gym, days_inactive, recipients, risk_level, skip_existing=False):
     """
     Notify staff about an inactive member.
     """
-    risk_levels = {
-        2: 'early_warning',
-        3: 'at_risk',
-        5: 'high_risk',
-        7: 'critical',
+    level_labels = {
+        'early_warning': 'Early Warning',
+        'at_risk': 'At Risk',
+        'high_risk': 'High Risk',
+        'critical': 'Critical',
     }
-    level = 'critical'
-    for threshold, lvl in sorted(risk_levels.items()):
-        if days_inactive >= threshold:
-            level = lvl
+    level_label = level_labels[risk_level]
 
     for recipient in recipients:
+        if skip_existing and Notification.objects.filter(
+            gym=gym,
+            recipient=recipient,
+            notification_type='inactivity_alert',
+            related_member_id=member.id,
+            message__icontains=f'Risk level: {risk_level}.',
+        ).exists():
+            continue
         create_notification(
             gym=gym,
             recipient=recipient,
             notification_type='inactivity_alert',
-            title=f'Inactive Member Alert: {member.full_name}',
-            message=f'{member.full_name} has been inactive for {days_inactive} days. Risk level: {level}.',
+            title=f'{level_label} Retention Risk: {member.full_name}',
+            message=f'{member.full_name} has been inactive for {days_inactive} days. Risk level: {level_label}.',
             member_id=member.id,
         )
 

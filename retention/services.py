@@ -1,7 +1,7 @@
 """
 Retention service module: risk calculation, contact logging, metrics.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.db.models import Count, Q, Avg
 from django.utils import timezone
 
@@ -12,29 +12,65 @@ from retention.models import RetentionRiskLevel, ContactLog, RetentionMetric
 def calculate_retention_risk(member, gym):
     """Calculate and persist a member's current inactivity risk using gym settings."""
     from attendance.services import get_gym_local_date
+    from accounts.models import GymSettings
+    from django.contrib.auth import get_user_model
+    from memberships.models import MemberSubscription
+
+    settings_obj = GymSettings.objects.filter(gym=gym).first()
     now = timezone.now()
-    reference = member.last_attendance_date or member.joined_at
-    days_inactive = max(0, (get_gym_local_date(gym, now) - get_gym_local_date(gym, reference)).days)
+    today = get_gym_local_date(gym, now)
+    reference = member.last_attendance_date
+    if not reference:
+        current_subscription = MemberSubscription.objects.filter(
+            member=member,
+            status='active',
+            start_date__lte=today,
+            end_date__gte=today,
+        ).order_by('start_date').first()
+        reference = current_subscription.start_date if current_subscription else member.joined_at
+    reference_date = get_gym_local_date(gym, reference) if isinstance(reference, datetime) else reference
+    days_inactive = max(0, (today - reference_date).days)
 
     # Prefer explicit custom risk levels when configured; otherwise use gym-level defaults.
     configured_levels = RetentionRiskLevel.objects.filter(gym=gym, is_active=True).order_by('min_days')
     if configured_levels.exists():
         risk_level = RetentionRiskLevel.get_risk_level(gym, days_inactive)
-    elif days_inactive >= gym.inactivity_critical_risk_days:
-        risk_level = 'critical'
-    elif days_inactive >= gym.inactivity_high_risk_days:
-        risk_level = 'high_risk'
-    elif days_inactive >= gym.inactivity_at_risk_days:
-        risk_level = 'at_risk'
-    elif days_inactive >= gym.inactivity_early_warning_days:
-        risk_level = 'early_warning'
     else:
-        risk_level = 'none'
+        thresholds = settings_obj or gym
+        if days_inactive >= thresholds.inactivity_critical_risk_days:
+            risk_level = 'critical'
+        elif days_inactive >= thresholds.inactivity_high_risk_days:
+            risk_level = 'high_risk'
+        elif days_inactive >= thresholds.inactivity_at_risk_days:
+            risk_level = 'at_risk'
+        elif days_inactive >= thresholds.inactivity_early_warning_days:
+            risk_level = 'early_warning'
+        else:
+            risk_level = 'none'
 
-    if member.retention_risk_level != risk_level or member.retention_risk_days != days_inactive:
+    previous_risk_level = member.retention_risk_level
+    if previous_risk_level != risk_level or member.retention_risk_days != days_inactive:
         member.retention_risk_level = risk_level
         member.retention_risk_days = days_inactive
         member.save(update_fields=['retention_risk_level', 'retention_risk_days'])
+
+    if risk_level != 'none':
+        if not settings_obj or settings_obj.notify_inactivity:
+            User = get_user_model()
+            recipients = User.objects.filter(
+                gym_memberships__gym=gym,
+                gym_memberships__role__in=['owner', 'staff'],
+                gym_memberships__status='active',
+            ).distinct()
+            from notifications.services import notify_inactivity
+            notify_inactivity(
+                member,
+                gym,
+                days_inactive,
+                recipients,
+                risk_level,
+                skip_existing=risk_level == previous_risk_level,
+            )
     return risk_level, days_inactive
 
 

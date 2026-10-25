@@ -2,17 +2,18 @@
 Payments service module: payment recording, reminders, outstanding tracking.
 """
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from django.db.models import Sum, Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from members.models import MemberProfile
 from payments.models import Payment, FeeReminder
 from memberships.models import MemberSubscription
 
 
-def record_payment(member, amount, method='cash', subscription=None, notes='', reference_number='', recorded_by=None):
+def record_payment(member, amount, method='cash', subscription=None, notes='', reference_number='', recorded_by=None, payment_date=None):
     """
     Record a payment for a member.
     """
@@ -27,10 +28,29 @@ def record_payment(member, amount, method='cash', subscription=None, notes='', r
         raise ValidationError('Choose a valid payment method.')
     if subscription and (subscription.member_id != member.id or subscription.gym_id != member.gym_id):
         raise ValidationError('The selected subscription does not belong to this member and gym.')
+
+    if payment_date is None:
+        payment_date = timezone.now()
+    elif isinstance(payment_date, datetime):
+        if timezone.is_naive(payment_date):
+            payment_date = timezone.make_aware(payment_date, timezone=ZoneInfo(member.gym.timezone or 'UTC'))
+    elif isinstance(payment_date, date):
+        payment_date = timezone.make_aware(
+            datetime.combine(payment_date, time.min),
+            timezone=ZoneInfo(member.gym.timezone or 'UTC'),
+        )
+    else:
+        raise ValidationError('Enter a valid payment date.')
+
+    from attendance.services import get_gym_local_date
+    if get_gym_local_date(member.gym, payment_date) > get_gym_local_date(member.gym):
+        raise ValidationError('Payment date cannot be in the future.')
+
     payment = Payment.objects.create(
         member=member,
         subscription=subscription,
         amount=amount,
+        payment_date=payment_date,
         method=method,
         reference_number=reference_number,
         notes=notes,

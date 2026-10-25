@@ -7,6 +7,7 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django import forms
 
 from members.models import MemberProfile
 from payments.models import Payment, FeeReminder
@@ -65,6 +66,7 @@ def payment_add(request):
             messages.error(request, 'Selected subscription does not belong to this member.')
             return redirect('payment_add')
         try:
+            payment_date = forms.DateField(required=False).clean(request.POST.get('payment_date') or None)
             payment = record_payment(
                 member=member,
                 amount=amount,
@@ -73,9 +75,10 @@ def payment_add(request):
                 reference_number=reference_number,
                 notes=notes,
                 recorded_by=request.user,
+                payment_date=payment_date,
             )
         except (ValidationError, ValueError, TypeError):
-            messages.error(request, 'Please enter a valid positive amount and payment method.')
+            messages.error(request, 'Please enter a valid positive amount, payment method, and payment date.')
             return redirect('payment_add')
 
         AuditLog.log_action(
@@ -88,6 +91,7 @@ def payment_add(request):
         return redirect('payment_list')
 
     from memberships.services import sync_subscription_statuses
+    from attendance.services import get_gym_local_date
     sync_subscription_statuses(gym=gym)
     members = MemberProfile.objects.filter(gym=gym, status='active').order_by('full_name')
     subscriptions = MemberSubscription.objects.filter(gym=gym, status__in=['active', 'pending']).select_related('member', 'plan').order_by('member__full_name')
@@ -96,6 +100,7 @@ def payment_add(request):
         'members': members,
         'subscriptions': subscriptions,
         'method_choices': Payment.METHOD_CHOICES,
+        'payment_date_today': get_gym_local_date(gym).isoformat(),
         'user_role': get_user_role(request.user, gym),
     }
     return render(request, 'payments/form.html', context)

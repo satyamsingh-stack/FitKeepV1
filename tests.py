@@ -5,6 +5,7 @@ import re
 
 from django.test import Client, TestCase
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
@@ -12,12 +13,15 @@ from datetime import timedelta
 from gyms.models import Gym
 from gyms.services import get_user_gym, can_access_gym, can_manage_members
 from accounts.models import GymMembership
+from accounts.models import GymSettings
 from members.models import MemberProfile
 from memberships.models import MembershipPlan, MemberSubscription
 from attendance.models import Attendance
 from attendance.services import check_in_member, generate_qr_code, get_gym_local_date, get_streak_data
 from retention.services import calculate_retention_risk, get_at_risk_members
+from payments.models import Payment
 from payments.services import record_payment, get_outstanding_payments
+from notifications.models import Notification
 
 
 User = get_user_model()
@@ -264,6 +268,13 @@ class MemberQRCheckInTests(TestCase):
 class RetentionServiceTests(TestCase):
     def setUp(self):
         self.gym = Gym.objects.create(name='Test Gym', slug='test-gym', status='active')
+        self.owner = User.objects.create_user(
+            username='retention-owner',
+            email='retention-owner@test.com',
+            password='pass12345',
+            role='gym_owner',
+        )
+        GymMembership.objects.create(user=self.owner, gym=self.gym, role='owner', status='active')
         self.member = MemberProfile.objects.create(
             gym=self.gym,
             full_name='Test Member',
@@ -312,11 +323,95 @@ class RetentionServiceTests(TestCase):
         risk_level, days_inactive = calculate_retention_risk(self.member, self.gym)
         self.assertEqual(days_inactive, 10)
         self.assertEqual(risk_level, 'critical')
+        notification = Notification.objects.get(recipient=self.owner)
+        self.assertIn('Critical', notification.title)
+        self.assertIn('Risk level: Critical', notification.message)
+
+        calculate_retention_risk(self.member, self.gym)
+        self.assertEqual(Notification.objects.filter(recipient=self.owner).count(), 1)
+
+    def test_saved_gym_settings_control_risk_thresholds(self):
+        from retention.models import RetentionRiskLevel
+
+        RetentionRiskLevel.objects.filter(gym=self.gym).delete()
+        self.gym.inactivity_critical_risk_days = 30
+        self.gym.save(update_fields=['inactivity_critical_risk_days'])
+        self.member.last_attendance_date = timezone.now() - timedelta(days=6)
+        self.member.save(update_fields=['last_attendance_date'])
+        GymSettings.objects.create(
+            gym=self.gym,
+            inactivity_early_warning_days=1,
+            inactivity_at_risk_days=2,
+            inactivity_high_risk_days=3,
+            inactivity_critical_risk_days=5,
+        )
+
+        risk_level, _ = calculate_retention_risk(self.member, self.gym)
+
+        self.assertEqual(risk_level, 'critical')
+
+    def test_existing_critical_risk_without_notification_is_backfilled(self):
+        self.member.retention_risk_level = 'critical'
+        self.member.save(update_fields=['retention_risk_level'])
+
+        calculate_retention_risk(self.member, self.gym)
+
+        self.assertEqual(Notification.objects.filter(recipient=self.owner).count(), 1)
+
+    def test_member_without_attendance_uses_active_membership_start_date(self):
+        today = get_gym_local_date(self.gym)
+        plan = MembershipPlan.objects.create(
+            gym=self.gym,
+            name='Risk Test Monthly',
+            duration='monthly',
+            duration_days=30,
+            price=1000,
+        )
+        self.member.last_attendance_date = None
+        self.member.save(update_fields=['last_attendance_date'])
+        MemberSubscription.objects.create(
+            member=self.member,
+            plan=plan,
+            gym=self.gym,
+            start_date=today - timedelta(days=27),
+            end_date=today + timedelta(days=2),
+            total_amount=1000,
+            status='active',
+        )
+
+        risk_level, days_inactive = calculate_retention_risk(self.member, self.gym)
+
+        self.assertEqual(days_inactive, 27)
+        self.assertEqual(risk_level, 'critical')
+        notification = Notification.objects.get(recipient=self.owner)
+        self.assertIn('Critical', notification.title)
+
+    def test_notification_icon_shows_unread_count(self):
+        Notification.objects.create(
+            gym=self.gym,
+            recipient=self.owner,
+            notification_type='inactivity_alert',
+            title='Critical Retention Risk',
+            message='Member is at critical risk.',
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('notification_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">1</span>')
 
 
 class PaymentServiceTests(TestCase):
     def setUp(self):
         self.gym = Gym.objects.create(name='Test Gym', slug='test-gym', status='active')
+        self.owner = User.objects.create_user(
+            username='payment-owner',
+            email='payment-owner@test.com',
+            password='pass12345',
+            role='gym_owner',
+        )
+        GymMembership.objects.create(user=self.owner, gym=self.gym, role='owner', status='active')
         self.member = MemberProfile.objects.create(
             gym=self.gym,
             full_name='Test Member',
@@ -344,6 +439,44 @@ class PaymentServiceTests(TestCase):
         payment = record_payment(self.member, 500, method='cash', subscription=self.subscription)
         self.assertEqual(payment.amount, 500)
         self.assertEqual(payment.status, 'completed')
+
+    def test_record_payment_preserves_backdated_local_date(self):
+        payment_date = get_gym_local_date(self.gym) - timedelta(days=12)
+
+        payment = record_payment(
+            self.member,
+            500,
+            subscription=self.subscription,
+            payment_date=payment_date,
+        )
+
+        self.assertEqual(get_gym_local_date(self.gym, payment.payment_date), payment_date)
+        self.assertEqual(self.subscription.payments.get().amount, 500)
+
+    def test_record_payment_rejects_future_date(self):
+        with self.assertRaises(ValidationError):
+            record_payment(
+                self.member,
+                500,
+                subscription=self.subscription,
+                payment_date=get_gym_local_date(self.gym) + timedelta(days=1),
+            )
+
+    def test_payment_form_records_selected_backdate(self):
+        payment_date = get_gym_local_date(self.gym) - timedelta(days=8)
+        self.client.force_login(self.owner)
+
+        response = self.client.post(reverse('payment_add'), {
+            'member_id': self.member.member_id,
+            'subscription_id': str(self.subscription.id),
+            'amount': '125.50',
+            'method': 'cash',
+            'payment_date': payment_date.isoformat(),
+        })
+
+        self.assertRedirects(response, reverse('payment_list'))
+        payment = Payment.objects.get(member=self.member)
+        self.assertEqual(get_gym_local_date(self.gym, payment.payment_date), payment_date)
 
     def test_get_outstanding_payments(self):
         record_payment(self.member, 500, subscription=self.subscription)

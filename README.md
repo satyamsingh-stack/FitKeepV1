@@ -71,7 +71,7 @@ Open `http://127.0.0.1:8000/`.
 ## Management commands
 
 - `python manage.py seed_demo_data` — create demo records for local development.
-- `python manage.py process_gym_alerts` — process due inactivity and expiry alerts. Run periodically with a scheduler if you need unattended processing.
+- `python manage.py process_gym_alerts` — refresh inactivity risk and process expiry alerts. Risk notifications are created when a member enters a new risk level; run this periodically with a scheduler for unattended updates. Risk levels use the gym's configured thresholds.
 
 ## Tests
 
