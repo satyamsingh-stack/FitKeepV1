@@ -7,6 +7,7 @@ from django.shortcuts import render, redirect
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count, Sum
+from zoneinfo import ZoneInfo
 
 from gyms.services import get_user_gym, get_user_role, can_manage_members
 from members.models import MemberProfile
@@ -30,7 +31,7 @@ def dashboard_view(request):
     from retention.services import get_at_risk_members
     from django.db.models import Sum
     from datetime import timedelta
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    from zoneinfo import ZoneInfoNotFoundError
 
     from memberships.services import sync_subscription_statuses
     from memberships.models import MembershipPlan
@@ -40,6 +41,13 @@ def dashboard_view(request):
     week_ago = today - timedelta(days=6)
     month_ago = today - timedelta(days=29)
     total_members = MemberProfile.objects.filter(gym=gym, status='active').count()
+    gym_now = timezone.now().astimezone(ZoneInfo(gym.timezone)) if getattr(gym, 'timezone', None) else timezone.now()
+    occupancy_window_start = gym_now - timedelta(hours=12)
+    live_occupancy = Attendance.objects.filter(
+        gym=gym,
+        check_in_at__gte=occupancy_window_start,
+        check_in_at__lte=gym_now,
+    ).count()
     today_attendance = Attendance.objects.filter(gym=gym, check_in_date=today).count()
     week_attendance = Attendance.objects.filter(gym=gym, check_in_date__gte=week_ago, check_in_date__lte=today).count()
     active_subscriptions = MemberSubscription.objects.filter(
@@ -92,6 +100,7 @@ def dashboard_view(request):
         'has_attendance': has_attendance,
         'setup_incomplete': not (has_plans and has_members and has_attendance),
         'total_members': total_members,
+        'live_occupancy': live_occupancy,
         'today_attendance': today_attendance,
         'week_attendance': week_attendance,
         'active_subscriptions': active_subscriptions,
