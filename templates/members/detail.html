@@ -46,6 +46,7 @@
                         <p><strong>{{ sub.plan.name|default:"Custom plan" }}</strong></p>
                         <p>{{ sub.start_date }} to {{ sub.end_date }}</p>
                         <p>Status: <span class="badge bg-{% if sub.status == 'active' %}success{% else %}secondary{% endif %}">{{ sub.status }}</span>{% if sub.outstanding_balance > 0 %} <span class="badge bg-danger">&#8377;{{ sub.outstanding_balance }} due</span>{% endif %}</p>
+                        <a href="{% url 'subscription_edit' sub.id %}" class="btn btn-sm btn-outline-primary mb-3"><i class="bi bi-pencil me-1"></i>Edit membership</a>
                         {% endfor %}
                     {% else %}
                         <p class="text-muted">No membership yet.</p>

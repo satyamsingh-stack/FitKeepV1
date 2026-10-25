@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'retention',
     'payments',
     'notifications',
+    'enquiries',
     'audit',
     'reports',
 ]

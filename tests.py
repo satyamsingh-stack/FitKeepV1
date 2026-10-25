@@ -22,6 +22,7 @@ from retention.services import calculate_retention_risk, get_at_risk_members
 from payments.models import Payment
 from payments.services import record_payment, get_outstanding_payments
 from notifications.models import Notification
+from enquiries.models import Enquiry
 
 
 User = get_user_model()
@@ -485,6 +486,95 @@ class PaymentServiceTests(TestCase):
         self.assertEqual(outstanding[0]['outstanding'], 499)
 
 
+class EnquiryTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username='enquiry-owner',
+            email='enquiry-owner@test.com',
+            password='pass12345',
+            role='gym_owner',
+        )
+        self.gym = Gym.objects.create(
+            name='Enquiry Gym',
+            slug='enquiry-gym',
+            status='active',
+            phone='+91 98765 43210',
+        )
+        GymMembership.objects.create(
+            user=self.owner,
+            gym=self.gym,
+            role='owner',
+            is_primary=True,
+            status='active',
+        )
+        self.plan = MembershipPlan.objects.create(
+            gym=self.gym,
+            name='Strength Plan',
+            duration='monthly',
+            duration_days=30,
+            price=1200,
+            description='Weights and coaching.',
+        )
+        self.client.force_login(self.owner)
+
+    def test_owner_can_add_enquiry_with_comments_and_follow_up_date(self):
+        follow_up = get_gym_local_date(self.gym) + timedelta(days=2)
+
+        response = self.client.post(reverse('enquiry_list'), {
+            'name': 'Asha Rao',
+            'phone': '9876543210',
+            'whatsapp_number': '+91 98765 43210',
+            'email': 'asha@example.com',
+            'interested_plan': str(self.plan.id),
+            'details': 'Asked about strength training.',
+            'comments': 'Call in the evening.',
+            'follow_up_date': follow_up.isoformat(),
+            'status': 'follow_up',
+        })
+
+        self.assertRedirects(response, reverse('enquiry_list'))
+        enquiry = Enquiry.objects.get(gym=self.gym)
+        self.assertEqual(enquiry.created_by, self.owner)
+        self.assertEqual(enquiry.follow_up_date, follow_up)
+        self.assertEqual(enquiry.comments, 'Call in the evening.')
+        self.assertEqual(enquiry.interested_plan, self.plan)
+
+    def test_enquiry_page_offers_prefilled_welcome_whatsapp_only(self):
+        Enquiry.objects.create(
+            gym=self.gym,
+            name='Asha Rao',
+            phone='9876543210',
+            whatsapp_number='+91 98765 43210',
+        )
+
+        response = self.client.get(reverse('enquiry_list'))
+
+        self.assertContains(response, 'https://wa.me/919876543210?text=')
+        self.assertContains(response, 'WhatsApp welcome')
+        self.assertNotContains(response, 'Membership brochure')
+        self.assertNotContains(response, 'Send plans brochure')
+
+    def test_enquiry_plan_is_limited_to_the_current_gym(self):
+        other_gym = Gym.objects.create(name='Other Gym', slug='other-gym')
+        other_plan = MembershipPlan.objects.create(
+            gym=other_gym,
+            name='Private Plan',
+            duration='monthly',
+            duration_days=30,
+            price=500,
+        )
+
+        response = self.client.post(reverse('enquiry_list'), {
+            'name': 'Asha Rao',
+            'phone': '9876543210',
+            'interested_plan': str(other_plan.id),
+            'status': 'new',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Enquiry.objects.exists())
+
+
 class ModelTests(TestCase):
     def test_gym_slug_auto_generated(self):
         gym = Gym.objects.create(name='My New Gym')
@@ -688,6 +778,70 @@ class AdminWorkflowTests(TestCase):
         self.assertEqual(new_sub.discount_amount, 100)
         self.assertEqual(new_sub.outstanding_balance, 500)
         self.assertEqual(self.member.payments.get().method, 'upi')
+        self.assertEqual(new_sub.plan, self.plan)
+
+    def test_renewal_uses_current_plan_without_prompting_to_choose(self):
+        sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired', total=850)
+
+        response = self.client.get(reverse('subscription_renew', args=[sub.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Renewal keeps this membership plan')
+        self.assertContains(response, 'value="850.00"')
+        self.assertNotContains(response, 'name="plan"')
+
+    def test_membership_can_be_edited_without_changing_payment_history(self):
+        from payments.models import Payment
+
+        sub = self._sub(self.today - timedelta(days=10), self.today + timedelta(days=20), 'active')
+        payment = record_payment(self.member, 200, subscription=sub)
+        alternate_plan = MembershipPlan.objects.create(
+            gym=self.gym, name='Quarterly', duration='quarterly', duration_days=90, price=2500,
+        )
+        new_start = self.today - timedelta(days=5)
+        new_end = self.today + timedelta(days=84)
+
+        response = self.client.post(reverse('subscription_edit', args=[sub.id]), {
+            'plan': str(alternate_plan.id),
+            'start_date': new_start.isoformat(),
+            'end_date': new_end.isoformat(),
+            'total_amount': '2500.00',
+            'discount_amount': '100.00',
+            'status': 'active',
+            'notes': 'Plan updated after discussion.',
+        })
+
+        self.assertRedirects(response, reverse('subscription_list'))
+        sub.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(sub.plan, alternate_plan)
+        self.assertEqual(sub.start_date, new_start)
+        self.assertEqual(sub.end_date, new_end)
+        self.assertEqual(sub.total_amount, 2500)
+        self.assertEqual(sub.discount_amount, 100)
+        self.assertEqual(sub.notes, 'Plan updated after discussion.')
+        self.assertEqual(payment.amount, 200)
+
+    def test_membership_edit_rejects_plan_from_another_gym(self):
+        sub = self._sub(self.today - timedelta(days=10), self.today + timedelta(days=20), 'active')
+        other_gym = Gym.objects.create(name='Other Gym', slug='other-membership-gym')
+        other_plan = MembershipPlan.objects.create(
+            gym=other_gym, name='Other Plan', duration='monthly', duration_days=30, price=500,
+        )
+
+        response = self.client.post(reverse('subscription_edit', args=[sub.id]), {
+            'plan': str(other_plan.id),
+            'start_date': sub.start_date.isoformat(),
+            'end_date': sub.end_date.isoformat(),
+            'total_amount': str(sub.total_amount),
+            'discount_amount': str(sub.discount_amount),
+            'status': sub.status,
+            'notes': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        sub.refresh_from_db()
+        self.assertEqual(sub.plan, self.plan)
 
     def test_renewal_rejects_overpayment(self):
         sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'active')

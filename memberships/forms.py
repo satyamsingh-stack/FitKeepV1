@@ -101,6 +101,38 @@ class SubscriptionForm(forms.ModelForm):
         return cleaned
 
 
+class SubscriptionEditForm(forms.ModelForm):
+    """Edit the terms and status of an existing membership."""
+
+    class Meta:
+        model = MemberSubscription
+        fields = ['plan', 'start_date', 'end_date', 'total_amount', 'discount_amount', 'status', 'notes']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, gym, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['plan'].queryset = MembershipPlan.objects.filter(gym=gym).order_by('name')
+        self.fields['plan'].required = False
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        start_date = cleaned.get('start_date')
+        end_date = cleaned.get('end_date')
+        total_amount = cleaned.get('total_amount')
+        discount_amount = cleaned.get('discount_amount') or 0
+        if start_date and end_date and end_date < start_date:
+            self.add_error('end_date', _('End date must be on or after the start date.'))
+        if total_amount is not None and discount_amount > total_amount:
+            self.add_error('discount_amount', _('Discount cannot exceed the membership fee.'))
+        return cleaned
+
+
 class PaymentForm(forms.ModelForm):
     """Form for recording payments."""
 

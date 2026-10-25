@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Edit membership · FitKeep{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><div class="eyebrow">Membership management</div><h1>Edit membership</h1><p>Update plan terms and membership status. Payment history is preserved.</p></div>
+    <a href="{% url 'subscription_list' %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>Memberships</a>
+</div>
+<div class="row">
+    <div class="col-xl-7 col-lg-9">
+        <div class="card"><div class="card-body p-4">
+            <p class="mb-4"><strong>{{ subscription.member.full_name }}</strong> <span class="text-muted">· {{ subscription.member.member_id }}</span></p>
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+                <div class="mb-3"><label class="form-label" for="{{ form.plan.id_for_label }}">Plan</label>{{ form.plan }}{{ form.plan.errors }}<div class="form-text">Leave blank for a custom membership.</div></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="{{ form.start_date.id_for_label }}">Start date</label>{{ form.start_date }}{{ form.start_date.errors }}</div>
+                    <div class="col-md-6"><label class="form-label" for="{{ form.end_date.id_for_label }}">End date</label>{{ form.end_date }}{{ form.end_date.errors }}</div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6"><label class="form-label" for="{{ form.total_amount.id_for_label }}">Membership fee (₹)</label>{{ form.total_amount }}{{ form.total_amount.errors }}</div>
+                    <div class="col-md-6"><label class="form-label" for="{{ form.discount_amount.id_for_label }}">Discount (₹)</label>{{ form.discount_amount }}{{ form.discount_amount.errors }}</div>
+                </div>
+                <div class="mt-3"><label class="form-label" for="{{ form.status.id_for_label }}">Status</label>{{ form.status }}{{ form.status.errors }}</div>
+                <div class="mt-3 mb-4"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}{{ form.notes.errors }}</div>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>Save changes</button>
+                <a href="{% url 'subscription_list' %}" class="btn btn-light ms-1">Cancel</a>
+            </form>
+        </div></div>
+    </div>
+</div>
+{% endblock %}

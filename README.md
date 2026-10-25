@@ -6,6 +6,7 @@ FitKeep helps gym owners manage members, record attendance, follow up with inact
 
 - Gym owner and member portals with role-aware navigation.
 - Gym-scoped member and subscription records.
+- Enquiry tracking with manual follow-up dates, comments, and click-to-chat WhatsApp messages.
 - Attendance check-in, gym-specific QR codes, and daily duplicate prevention.
 - Inactivity risk calculation using each gym's configured thresholds.
 - Contact logs and follow-up tracking for retention calls.

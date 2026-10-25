@@ -3,13 +3,14 @@ Membership views: plans, subscriptions, renewals.
 """
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from datetime import timedelta
 
 from memberships.models import MembershipPlan, MemberSubscription
-from memberships.forms import MembershipPlanForm, SubscriptionForm
+from memberships.forms import MembershipPlanForm, SubscriptionEditForm, SubscriptionForm
 from memberships.services import renew_subscription, get_expiring_subscriptions
 from members.models import MemberProfile
 from gyms.services import can_manage_members, get_user_gym, get_user_role
@@ -218,6 +219,51 @@ def subscription_add(request):
 
 
 @login_required
+def subscription_edit(request, subscription_id):
+    """Edit a membership's plan, dates, fee, status, or notes."""
+    try:
+        gym = get_user_gym(request.user)
+    except Exception:
+        return redirect('login')
+
+    if not can_manage_members(request.user, gym):
+        return HttpResponseForbidden('You do not have permission to edit memberships.')
+
+    subscription = get_object_or_404(
+        MemberSubscription.objects.select_related('member', 'plan'),
+        id=subscription_id,
+        gym=gym,
+    )
+    if request.method == 'POST':
+        form = SubscriptionEditForm(request.POST, instance=subscription, gym=gym)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    updated_subscription = form.save()
+            except IntegrityError:
+                form.add_error(None, 'Another membership already exists for this member and date range.')
+            else:
+                AuditLog.log_action(
+                    actor=request.user,
+                    action='update',
+                    gym=gym,
+                    target=updated_subscription,
+                    metadata={'updated_fields': 'membership'},
+                )
+                messages.success(request, 'Membership updated successfully.')
+                return redirect('subscription_list')
+    else:
+        form = SubscriptionEditForm(instance=subscription, gym=gym)
+
+    return render(request, 'memberships/subscription_edit.html', {
+        'gym': gym,
+        'subscription': subscription,
+        'form': form,
+        'user_role': get_user_role(request.user, gym),
+    })
+
+
+@login_required
 def subscription_renew(request, subscription_id):
     """Renew a subscription."""
     try:
@@ -239,7 +285,7 @@ def subscription_renew(request, subscription_id):
     new_start = max(subscription.end_date + timedelta(days=1), today)
     plan = subscription.plan
     duration_days = plan.duration_days if plan else 30
-    default_fee = plan.price if plan else subscription.total_amount
+    default_fee = subscription.total_amount
 
     if request.method == 'POST':
         def money(name, default=Decimal('0')):
@@ -283,6 +329,7 @@ def subscription_renew(request, subscription_id):
         'new_start': new_start,
         'new_end': new_start + timedelta(days=duration_days - 1),
         'default_fee': default_fee,
+        'renewal_plan': plan,
         'method_choices': Payment.METHOD_CHOICES,
         'user_role': get_user_role(request.user, gym),
     }

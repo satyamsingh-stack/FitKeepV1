@@ -17,10 +17,11 @@ from attendance.views import (
 )
 from retention.views import retention_list, contact_log_create, contact_history, retention_report
 from payments.views import payment_list, payment_add, outstanding_payments, membership_fees
-from memberships.views import plan_list, plan_add, plan_edit, subscription_list, subscription_add, subscription_renew
+from memberships.views import plan_list, plan_add, plan_edit, subscription_list, subscription_add, subscription_edit, subscription_renew
 from notifications.views import notification_list, notification_mark_read, notification_mark_all_read
 from reports.views import dashboard_view, reports_view
 from audit.views import audit_history
+from enquiries.views import enquiry_list
 from landing_views import landing_view, features_view
 
 
@@ -51,6 +52,7 @@ urlpatterns = [
     # Gym-scoped URLs
     path('gym/', gym_home, name='gym_home'),
     path('gym/settings/', gym_settings_view, name='gym_settings'),
+    path('gym/enquiries/', enquiry_list, name='enquiry_list'),
 
     # Dashboard & reports
     path('gym/dashboard/', dashboard_view, name='dashboard'),
@@ -70,6 +72,7 @@ urlpatterns = [
     path('gym/plans/<int:plan_id>/edit/', plan_edit, name='plan_edit'),
     path('gym/subscriptions/', subscription_list, name='subscription_list'),
     path('gym/subscriptions/add/', subscription_add, name='subscription_add'),
+    path('gym/subscriptions/<int:subscription_id>/edit/', subscription_edit, name='subscription_edit'),
     path('gym/subscriptions/<int:subscription_id>/renew/', subscription_renew, name='subscription_renew'),
 
     # Payments
