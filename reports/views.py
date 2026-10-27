@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect
 from django.utils import timezone
+from django.utils.html import format_html, format_html_join
 from datetime import timedelta
 from django.db.models import Count, Sum
 from zoneinfo import ZoneInfo
@@ -35,12 +36,16 @@ def dashboard_view(request):
 
     from memberships.services import sync_subscription_statuses
     from memberships.models import MembershipPlan
-    from payments.services import get_outstanding_payments
     sync_subscription_statuses(gym=gym)
     today = get_gym_local_date(gym)
     week_ago = today - timedelta(days=6)
     month_ago = today - timedelta(days=29)
-    total_members = MemberProfile.objects.filter(gym=gym, status='active').count()
+    active_members = MemberSubscription.objects.filter(
+        gym=gym,
+        status='active',
+        start_date__lte=today,
+        end_date__gte=today,
+    ).values('member_id').distinct().count()
     gym_now = timezone.now().astimezone(ZoneInfo(gym.timezone)) if getattr(gym, 'timezone', None) else timezone.now()
     occupancy_window_start = gym_now - timedelta(hours=12)
     live_occupancy = Attendance.objects.filter(
@@ -52,6 +57,10 @@ def dashboard_view(request):
     week_attendance = Attendance.objects.filter(gym=gym, check_in_date__gte=week_ago, check_in_date__lte=today).count()
     active_subscriptions = MemberSubscription.objects.filter(
         gym=gym, status='active', start_date__lte=today, end_date__gte=today
+    ).count()
+    expired_subscriptions = MemberSubscription.objects.filter(
+        gym=gym,
+        status='expired',
     ).count()
     month_revenue = Payment.objects.filter(
         member__gym=gym, payment_date__date__gte=month_ago, payment_date__date__lte=today, status='completed'
@@ -68,45 +77,67 @@ def dashboard_view(request):
         daily_labels.append(day.strftime('%a'))
         daily_values.append(counts_by_date.get(day, 0))
 
+    chart_max = max(daily_values, default=0) or 1
+    chart_points = [
+        (50 + index * 100, 220 - round(value / chart_max * 170), label, value)
+        for index, (label, value) in enumerate(zip(daily_labels, daily_values))
+    ]
+    chart_grid = format_html_join(
+        '',
+        '<line x1="46" y1="{}" x2="654" y2="{}" stroke="#eef0f5" stroke-width="1"/>',
+        ((y, y) for y in (20, 70, 120, 170, 220)),
+    )
+    chart_line = ' '.join(f'{x},{y}' for x, y, _, _ in chart_points)
+    chart_dots = format_html_join(
+        '',
+        '<circle cx="{}" cy="{}" r="5" fill="#635bff" stroke="#fff" stroke-width="2"><title>{}: {} visits</title></circle>',
+        ((x, y, label, value) for x, y, label, value in chart_points),
+    )
+    chart_labels = format_html_join(
+        '',
+        '<text x="{}" y="258" text-anchor="middle" fill="#6b7280" font-size="12">{}</text>',
+        ((x, label) for x, _, label, _ in chart_points),
+    )
+    attendance_chart_svg = format_html(
+        '<svg id="attendance-trend-chart" xmlns="http://www.w3.org/2000/svg" '
+        'viewBox="0 0 700 280" preserveAspectRatio="none" role="img" '
+        'aria-label="Attendance for the last seven days">'
+        '<title>Attendance trend for the last seven days</title>'
+        '<g>{}</g>'
+        '<polyline points="{}" fill="none" stroke="#635bff" stroke-width="3" '
+        'stroke-linecap="round" stroke-linejoin="round"/>'
+        '{}{}'
+        '</svg>',
+        chart_grid,
+        chart_line,
+        chart_dots,
+        chart_labels,
+    )
+
     at_risk_members = get_at_risk_members(gym)
     at_risk_count = at_risk_members.count()
     expiring_soon = MemberSubscription.objects.filter(
         gym=gym, status='active', end_date__gte=today, end_date__lte=today + timedelta(days=7)
     ).count()
 
-    # "Needs attention" lists: the people the admin should act on today, each with a one-click action.
-    expiring_list = list(
-        MemberSubscription.objects.filter(
-            gym=gym, status='active', end_date__gte=today, end_date__lte=today + timedelta(days=7)
-        ).select_related('member', 'plan').order_by('end_date')[:5]
-    )
-    for sub in expiring_list:
-        sub.days_left = (sub.end_date - today).days
-    outstanding_all = get_outstanding_payments(gym)
-    outstanding_list = sorted(outstanding_all, key=lambda item: item['outstanding'], reverse=True)[:5]
-    outstanding_total = sum((item['outstanding'] for item in outstanding_all), 0)
     has_plans = MembershipPlan.objects.filter(gym=gym).exists()
     has_members = MemberProfile.objects.filter(gym=gym).exists()
     has_attendance = Attendance.objects.filter(gym=gym).exists()
 
     context = {
         'gym': gym,
-        'expiring_list': expiring_list,
-        'outstanding_list': outstanding_list,
-        'outstanding_count': len(outstanding_all),
-        'outstanding_total': outstanding_total,
         'has_plans': has_plans,
         'has_members': has_members,
         'has_attendance': has_attendance,
         'setup_incomplete': not (has_plans and has_members and has_attendance),
-        'total_members': total_members,
+        'active_members': active_members,
         'live_occupancy': live_occupancy,
         'today_attendance': today_attendance,
         'week_attendance': week_attendance,
         'active_subscriptions': active_subscriptions,
+        'expired_subscriptions': expired_subscriptions,
         'month_revenue': month_revenue,
-        'daily_labels': daily_labels,
-        'daily_values': daily_values,
+        'attendance_chart_svg': attendance_chart_svg,
         'at_risk_count': at_risk_count,
         'expiring_soon': expiring_soon,
         'user_role': get_user_role(request.user, gym),

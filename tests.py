@@ -517,34 +517,41 @@ class EnquiryTests(TestCase):
         )
         self.client.force_login(self.owner)
 
-    def test_owner_can_add_enquiry_with_comments_and_follow_up_date(self):
-        follow_up = get_gym_local_date(self.gym) + timedelta(days=2)
-
+    def test_owner_can_add_enquiry_with_name_phone_and_comment(self):
         response = self.client.post(reverse('enquiry_list'), {
             'name': 'Asha Rao',
             'phone': '9876543210',
-            'whatsapp_number': '+91 98765 43210',
-            'email': 'asha@example.com',
-            'interested_plan': str(self.plan.id),
-            'details': 'Asked about strength training.',
-            'comments': 'Call in the evening.',
-            'follow_up_date': follow_up.isoformat(),
-            'status': 'follow_up',
+            'comments': 'Asked about strength training.',
         })
 
         self.assertRedirects(response, reverse('enquiry_list'))
         enquiry = Enquiry.objects.get(gym=self.gym)
         self.assertEqual(enquiry.created_by, self.owner)
-        self.assertEqual(enquiry.follow_up_date, follow_up)
-        self.assertEqual(enquiry.comments, 'Call in the evening.')
-        self.assertEqual(enquiry.interested_plan, self.plan)
+        self.assertEqual(enquiry.name, 'Asha Rao')
+        self.assertEqual(enquiry.phone, '9876543210')
+        self.assertEqual(enquiry.comments, 'Asked about strength training.')
+        self.assertEqual(enquiry.status, 'new')
+        self.assertIsNone(enquiry.follow_up_date)
+
+    def test_enquiry_form_only_offers_name_phone_and_comment(self):
+        response = self.client.get(reverse('enquiry_list'))
+
+        self.assertEqual(set(response.context['form'].fields), {'name', 'phone', 'comments'})
+        self.assertContains(response, 'Phone no')
+        self.assertContains(response, '>Comment</label>')
+        self.assertNotContains(response, 'WhatsApp number</label>')
+        self.assertNotContains(response, 'Email (optional)</label>')
+        self.assertNotContains(response, 'Interested plan</label>')
+        self.assertNotContains(response, 'Follow-up date</label>')
+        self.assertNotContains(response, 'Status</label>')
+        self.assertNotContains(response, '<th>Follow-up</th>')
+        self.assertNotContains(response, '<th>Status</th>')
 
     def test_enquiry_page_offers_prefilled_welcome_whatsapp_only(self):
         Enquiry.objects.create(
             gym=self.gym,
             name='Asha Rao',
-            phone='9876543210',
-            whatsapp_number='+91 98765 43210',
+            phone='+91 98765 43210',
         )
 
         response = self.client.get(reverse('enquiry_list'))
@@ -554,25 +561,33 @@ class EnquiryTests(TestCase):
         self.assertNotContains(response, 'Membership brochure')
         self.assertNotContains(response, 'Send plans brochure')
 
-    def test_enquiry_plan_is_limited_to_the_current_gym(self):
-        other_gym = Gym.objects.create(name='Other Gym', slug='other-gym')
-        other_plan = MembershipPlan.objects.create(
-            gym=other_gym,
-            name='Private Plan',
-            duration='monthly',
-            duration_days=30,
-            price=500,
+    def test_editing_enquiry_updates_only_name_phone_and_comment(self):
+        enquiry = Enquiry.objects.create(
+            gym=self.gym,
+            name='Asha Rao',
+            phone='9876543210',
+            details='Legacy enquiry details',
+            comments='Old comment',
+            interested_plan=self.plan,
+            follow_up_date=get_gym_local_date(self.gym) + timedelta(days=2),
+            status='follow_up',
         )
 
         response = self.client.post(reverse('enquiry_list'), {
-            'name': 'Asha Rao',
-            'phone': '9876543210',
-            'interested_plan': str(other_plan.id),
-            'status': 'new',
+            'enquiry_id': enquiry.id,
+            'name': 'Asha Sharma',
+            'phone': '9999999999',
+            'comments': 'New comment',
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(Enquiry.objects.exists())
+        self.assertRedirects(response, reverse('enquiry_list'))
+        enquiry.refresh_from_db()
+        self.assertEqual(enquiry.name, 'Asha Sharma')
+        self.assertEqual(enquiry.phone, '9999999999')
+        self.assertEqual(enquiry.comments, 'New comment')
+        self.assertEqual(enquiry.details, 'Legacy enquiry details')
+        self.assertEqual(enquiry.interested_plan, self.plan)
+        self.assertEqual(enquiry.status, 'follow_up')
 
 
 class ModelTests(TestCase):
@@ -745,6 +760,56 @@ class AdminWorkflowTests(TestCase):
         sync_subscription_statuses(gym=self.gym)
         sub.refresh_from_db()
         self.assertEqual(sub.status, 'expired')
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'inactive')
+
+    def test_expired_membership_does_not_deactivate_member_with_current_membership(self):
+        from memberships.services import sync_subscription_statuses
+        self._sub(self.today - timedelta(days=40), self.today - timedelta(days=10), 'active')
+        self._sub(self.today - timedelta(days=5), self.today + timedelta(days=25), 'active')
+
+        sync_subscription_statuses(gym=self.gym)
+
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'active')
+
+    def test_member_directory_shows_inactive_after_membership_expires(self):
+        self._sub(self.today - timedelta(days=40), self.today - timedelta(days=10), 'expired')
+
+        response = self.client.get(reverse('member_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'inactive')
+        self.assertContains(response, '>inactive</span>')
+
+    def test_member_detail_shows_inactive_after_membership_expires(self):
+        self._sub(self.today - timedelta(days=600), self.today - timedelta(days=500), 'expired')
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<strong>Status:</strong> <span class="badge bg-secondary">inactive</span>')
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'inactive')
+
+    def test_renewal_reactivates_member_deactivated_by_expired_membership(self):
+        from memberships.services import sync_subscription_statuses
+        expired = self._sub(self.today - timedelta(days=40), self.today - timedelta(days=10), 'active')
+        sync_subscription_statuses(gym=self.gym)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'inactive')
+
+        response = self.client.post(reverse('subscription_renew', args=[expired.id]), {
+            'total_amount': '1000',
+            'discount_amount': '0',
+            'amount_paid': '0',
+            'payment_method': 'cash',
+        })
+
+        self.assertRedirects(response, reverse('member_detail', args=[self.member.member_id]))
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.status, 'active')
 
     def test_pending_membership_activates_when_it_starts(self):
         from memberships.services import sync_subscription_statuses
@@ -909,6 +974,16 @@ class AdminWorkflowTests(TestCase):
             self.assertEqual(self.client.get(reverse('subscription_list'), params).status_code, 200)
         self.assertContains(self.client.get(reverse('subscription_list'), {'filter': 'due'}), 'Ravi Kumar')
 
+    def test_expired_subscription_list_includes_call_and_whatsapp_actions(self):
+        self._sub(self.today - timedelta(days=40), self.today - timedelta(days=10), 'expired')
+
+        response = self.client.get(reverse('subscription_list'), {'status': 'expired'})
+
+        self.assertContains(response, 'href="tel:9000000001"')
+        self.assertContains(response, 'href="https://wa.me/9000000001"')
+        self.assertContains(response, 'title="Call member"')
+        self.assertContains(response, 'title="WhatsApp member"')
+
     def test_key_admin_pages_render(self):
         self._sub(self.today - timedelta(days=20), self.today + timedelta(days=3), 'active')
         sub = MemberSubscription.objects.get(member=self.member)
@@ -926,11 +1001,38 @@ class AdminWorkflowTests(TestCase):
         for url in urls:
             self.assertEqual(self.client.get(url).status_code, 200, url)
 
-    def test_dashboard_lists_renewals_and_dues(self):
+    def test_dashboard_omits_renewals_and_fees_panels(self):
         self._sub(self.today - timedelta(days=20), self.today + timedelta(days=2), 'active')
         response = self.client.get(reverse('dashboard'))
-        self.assertContains(response, 'Renewals due this week')
-        self.assertContains(response, 'Ravi Kumar')
+        self.assertNotContains(response, 'Renewals due this week')
+        self.assertNotContains(response, 'Fees to collect')
+
+    def test_dashboard_counts_distinct_members_with_current_memberships(self):
+        self._sub(self.today - timedelta(days=20), self.today + timedelta(days=2), 'active')
+        self._sub(self.today - timedelta(days=10), self.today + timedelta(days=10), 'active')
+        MemberProfile.objects.create(
+            gym=self.gym,
+            full_name='Profile without membership',
+            phone='9000000003',
+            status='active',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['active_members'], 1)
+        self.assertContains(response, '?membership=active')
+        self.assertContains(response, 'Members with a valid membership')
+
+    def test_dashboard_counts_expired_memberships(self):
+        self._sub(self.today - timedelta(days=60), self.today - timedelta(days=30), 'expired')
+        self._sub(self.today - timedelta(days=20), self.today - timedelta(days=1), 'active')
+        self._sub(self.today - timedelta(days=2), self.today + timedelta(days=28), 'active')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['expired_subscriptions'], 2)
+        self.assertContains(response, 'Memberships expired')
+        self.assertContains(response, '?status=expired')
 
     def test_dashboard_shows_live_occupancy_for_today_check_ins(self):
         self._sub(self.today - timedelta(days=20), self.today + timedelta(days=3), 'active')
@@ -946,3 +1048,18 @@ class AdminWorkflowTests(TestCase):
 
         self.assertContains(response, 'Live occupancy')
         self.assertContains(response, '1')
+
+    def test_dashboard_renders_attendance_chart_as_svg(self):
+        Attendance.objects.create(
+            gym=self.gym,
+            member=self.member,
+            check_in_date=self.today,
+            check_in_at=timezone.now(),
+            source='qr',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+        content = response.content.decode()
+        self.assertContains(response, 'id="attendance-trend-chart"')
+        self.assertEqual(len(re.findall(r'<circle\b', content)), 7)
+        self.assertRegex(content, r'<title>[^<]+: 1 visits</title>')

@@ -57,7 +57,7 @@ def enquiry_list(request):
         Enquiry.objects.filter(gym=gym).select_related('interested_plan').order_by('follow_up_date', '-created_at')
     )
     for enquiry in enquiries:
-        whatsapp_number = enquiry.whatsapp_number
+        whatsapp_number = enquiry.whatsapp_number or enquiry.phone
         enquiry.welcome_whatsapp_url = _whatsapp_url(
             whatsapp_number,
             f"Hi {enquiry.name}, welcome to {gym.name}! Thanks for enquiring with us. How can we help you get started?",

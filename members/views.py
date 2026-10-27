@@ -187,6 +187,7 @@ def member_detail(request, member_id):
     from memberships.models import MemberSubscription
     from memberships.services import sync_subscription_statuses
     sync_subscription_statuses(member=member)
+    member.refresh_from_db()
     from payments.models import Payment
     from retention.models import ContactLog
 

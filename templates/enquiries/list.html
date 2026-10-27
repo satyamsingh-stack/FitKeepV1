@@ -2,7 +2,7 @@
 {% block title %}Enquiries · FitKeep{% endblock %}
 {% block content %}
 <div class="page-heading">
-    <div><div class="eyebrow">Prospective members</div><h1>Enquiries</h1><p>Keep prospect details, comments, and follow-up dates in one place. WhatsApp messages are opened for you to review and send.</p></div>
+    <div><div class="eyebrow">Prospective members</div><h1>Enquiries</h1><p>Record a prospect's name, phone number, and comment.</p></div>
 </div>
 <div class="row g-4">
     <div class="col-xl-4">
@@ -13,14 +13,8 @@
                     {% if editing %}<input type="hidden" name="enquiry_id" value="{{ editing.id }}">{% endif %}
                     {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
                     <div class="mb-3"><label class="form-label" for="{{ form.name.id_for_label }}">Name</label>{{ form.name }}{{ form.name.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.phone.id_for_label }}">Phone</label>{{ form.phone }}{{ form.phone.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.whatsapp_number.id_for_label }}">WhatsApp number</label>{{ form.whatsapp_number }}<div class="form-text">Include the country code, e.g. 919876543210. Leave blank to use their phone number.</div>{{ form.whatsapp_number.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.email.id_for_label }}">Email (optional)</label>{{ form.email }}{{ form.email.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.interested_plan.id_for_label }}">Interested plan</label>{{ form.interested_plan }}{{ form.interested_plan.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.details.id_for_label }}">Enquiry details</label>{{ form.details }}{{ form.details.errors }}</div>
-                    <div class="mb-3"><label class="form-label" for="{{ form.comments.id_for_label }}">Comments</label>{{ form.comments }}{{ form.comments.errors }}</div>
-                    <div class="row g-3 mb-3"><div class="col-md-6"><label class="form-label" for="{{ form.follow_up_date.id_for_label }}">Follow-up date</label>{{ form.follow_up_date }}{{ form.follow_up_date.errors }}</div>
-                        <div class="col-md-6"><label class="form-label" for="{{ form.status.id_for_label }}">Status</label>{{ form.status }}{{ form.status.errors }}</div></div>
+                    <div class="mb-3"><label class="form-label" for="{{ form.phone.id_for_label }}">Phone no</label>{{ form.phone }}{{ form.phone.errors }}</div>
+                    <div class="mb-3"><label class="form-label" for="{{ form.comments.id_for_label }}">Comment</label>{{ form.comments }}{{ form.comments.errors }}</div>
                     <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>{% if editing %}Save changes{% else %}Save enquiry{% endif %}</button>
                     {% if editing %}<a class="btn btn-light" href="{% url 'enquiry_list' %}">Cancel</a>{% endif %}
                 </form>
@@ -29,19 +23,17 @@
     </div>
     <div class="col-xl-8">
         <div class="card"><div class="card-header d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Enquiry log</h2><span class="badge bg-primary">{{ enquiries|length }}</span></div>
-            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Prospect</th><th>Interest / comments</th><th>Follow-up</th><th>Status</th><th>Actions</th></tr></thead>
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Prospect</th><th>Interest / comments</th><th>Actions</th></tr></thead>
                 <tbody>{% for enquiry in enquiries %}
                     <tr>
-                        <td><strong>{{ enquiry.name }}</strong><span class="d-block small">{{ enquiry.phone }}</span>{% if enquiry.whatsapp_number %}<span class="d-block small text-muted">WhatsApp: {{ enquiry.whatsapp_number }}</span>{% endif %}{% if enquiry.email %}<span class="d-block small text-muted">{{ enquiry.email }}</span>{% endif %}</td>
+                        <td><strong>{{ enquiry.name }}</strong><span class="d-block small">{{ enquiry.phone }}</span>{% if enquiry.whatsapp_number and enquiry.whatsapp_number != enquiry.phone %}<span class="d-block small text-muted">WhatsApp: {{ enquiry.whatsapp_number }}</span>{% endif %}{% if enquiry.email %}<span class="d-block small text-muted">{{ enquiry.email }}</span>{% endif %}</td>
                         <td>{% if enquiry.interested_plan %}<strong>{{ enquiry.interested_plan.name }}</strong><br>{% endif %}{{ enquiry.details|default:'—'|linebreaksbr }}{% if enquiry.comments %}<div class="small text-muted mt-2"><strong>Comments:</strong> {{ enquiry.comments|linebreaksbr }}</div>{% endif %}</td>
-                        <td>{% if enquiry.follow_up_date %}{{ enquiry.follow_up_date|date:'M j, Y' }}{% else %}<span class="text-muted">Not set</span>{% endif %}</td>
-                        <td><span class="badge bg-{% if enquiry.status == 'converted' %}success{% elif enquiry.status == 'closed' %}secondary{% elif enquiry.status == 'follow_up' %}warning text-dark{% else %}primary{% endif %}">{{ enquiry.get_status_display }}</span></td>
                         <td><div class="d-flex flex-column gap-1">
                             <a class="btn btn-sm btn-outline-primary" href="{% url 'enquiry_list' %}?edit={{ enquiry.id }}"><i class="bi bi-pencil me-1"></i>Edit / comment</a>
                             {% if enquiry.welcome_whatsapp_url %}<a class="btn btn-sm btn-success" href="{{ enquiry.welcome_whatsapp_url }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1"></i>WhatsApp welcome</a>{% else %}<span class="small text-muted">Add a WhatsApp number to follow up</span>{% endif %}
                         </div></td>
                     </tr>
-                {% empty %}<tr><td colspan="5" class="text-center py-5 text-muted">No enquiries yet. Use the form to add your first prospect.</td></tr>{% endfor %}</tbody>
+                {% empty %}<tr><td colspan="3" class="text-center py-5 text-muted">No enquiries yet. Use the form to add your first prospect.</td></tr>{% endfor %}</tbody>
             </table></div>
         </div>
     </div>

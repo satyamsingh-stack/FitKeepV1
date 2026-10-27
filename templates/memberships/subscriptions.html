@@ -44,6 +44,10 @@
                     <td><span class="badge bg-{% if sub.status == 'active' %}success{% elif sub.status == 'expired' %}secondary{% elif sub.status == 'cancelled' %}danger{% else %}warning{% endif %}">{{ sub.status }}</span></td>
                     <td>{% if sub.balance > 0 %}<span class="text-danger fw-semibold">&#8377;{{ sub.balance }}</span>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
                     <td class="text-nowrap">
+                        {% if sub.member.phone %}
+                        <a href="tel:{{ sub.member.phone }}" class="btn btn-sm btn-outline-secondary" title="Call member"><i class="bi bi-telephone"></i></a>
+                        <a href="https://wa.me/{{ sub.member.phone }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success" title="WhatsApp member"><i class="bi bi-whatsapp"></i></a>
+                        {% endif %}
                         <a href="{% url 'subscription_edit' sub.id %}" class="btn btn-sm btn-outline-primary" title="Edit membership"><i class="bi bi-pencil"></i> Edit</a>
                         {% if sub.balance > 0 %}<a href="{% url 'payment_add' %}?member={{ sub.member.member_id }}&amp;subscription_id={{ sub.id }}" class="btn btn-sm btn-success" title="Collect payment"><i class="bi bi-cash"></i> Collect</a>{% endif %}
                         <a href="{% url 'subscription_renew' sub.id %}" class="btn btn-sm btn-outline-success" title="Renew"><i class="bi bi-arrow-repeat"></i> Renew</a>

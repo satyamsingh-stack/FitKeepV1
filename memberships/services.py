@@ -73,7 +73,40 @@ def sync_subscription_statuses(gym=None, member=None):
         qs = qs.filter(member=member)
     now = timezone.now()
     changed = qs.filter(status__in=['active', 'pending'], end_date__lt=today).update(status='expired', updated_at=now)
-    changed += qs.filter(status='pending', start_date__lte=today, end_date__gte=today).update(status='active', updated_at=now)
+    activating_member_ids = list(
+        qs.filter(status='pending', start_date__lte=today, end_date__gte=today)
+        .values_list('member_id', flat=True)
+    )
+    changed += qs.filter(status='pending', start_date__lte=today, end_date__gte=today).update(
+        status='active',
+        updated_at=now,
+    )
+
+    if activating_member_ids:
+        MemberProfile.objects.filter(
+            id__in=activating_member_ids,
+            status='inactive',
+        ).update(status='active', updated_at=now)
+
+    expired_members = MemberProfile.objects.filter(
+        gym=gym,
+        status='active',
+        subscriptions__gym=gym,
+        subscriptions__status='expired',
+        subscriptions__end_date__lt=today,
+    )
+    if member is not None:
+        expired_members = expired_members.filter(pk=member.pk)
+    expired_member_ids = expired_members.exclude(
+        subscriptions__gym=gym,
+        subscriptions__status='active',
+        subscriptions__start_date__lte=today,
+        subscriptions__end_date__gte=today,
+    ).values('id')
+    MemberProfile.objects.filter(id__in=expired_member_ids).update(
+        status='inactive',
+        updated_at=now,
+    )
     return changed
 
 
@@ -185,4 +218,7 @@ def renew_with_payment(subscription, plan=None, total_amount=None, discount_amou
                 subscription=new_sub, reference_number=reference_number,
                 notes='Collected at renewal', recorded_by=recorded_by,
             )
+        if new_sub.status == 'active' and new_sub.member.status == 'inactive':
+            new_sub.member.status = 'active'
+            new_sub.member.save(update_fields=['status', 'updated_at'])
     return new_sub, payment
