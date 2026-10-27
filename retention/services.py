@@ -69,7 +69,6 @@ def calculate_retention_risk(member, gym):
                 days_inactive,
                 recipients,
                 risk_level,
-                skip_existing=risk_level == previous_risk_level,
             )
     return risk_level, days_inactive
 

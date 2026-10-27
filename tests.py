@@ -1019,12 +1019,14 @@ class AdminWorkflowTests(TestCase):
             member.save(update_fields=['last_attendance_date'])
 
         self.client.get(reverse('dashboard'))
+        self.client.get(reverse('retention_list'))
         notifications_after_first_visit = Notification.objects.filter(
             gym=self.gym,
             recipient=self.owner,
             notification_type='inactivity_alert',
         ).count()
         self.client.get(reverse('dashboard'))
+        self.client.get(reverse('retention_list'))
         notifications_after_second_visit = Notification.objects.filter(
             gym=self.gym,
             recipient=self.owner,
