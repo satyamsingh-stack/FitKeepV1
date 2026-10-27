@@ -40,7 +40,7 @@ def notify_inactivity(member, gym, days_inactive, recipients, risk_level, skip_e
             recipient=recipient,
             notification_type='inactivity_alert',
             related_member_id=member.id,
-            message__icontains=f'Risk level: {risk_level}.',
+            message__icontains=f'Risk level: {level_label}.',
         ).exists():
             continue
         create_notification(

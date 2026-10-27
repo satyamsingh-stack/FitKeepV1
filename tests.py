@@ -1007,6 +1007,33 @@ class AdminWorkflowTests(TestCase):
         self.assertNotContains(response, 'Renewals due this week')
         self.assertNotContains(response, 'Fees to collect')
 
+    def test_dashboard_does_not_duplicate_at_risk_notifications(self):
+        for index in range(5):
+            member = self.member if index == 0 else MemberProfile.objects.create(
+                gym=self.gym,
+                full_name=f'At-risk member {index}',
+                phone=f'900000001{index}',
+                status='active',
+            )
+            member.last_attendance_date = timezone.now() - timedelta(days=3)
+            member.save(update_fields=['last_attendance_date'])
+
+        self.client.get(reverse('dashboard'))
+        notifications_after_first_visit = Notification.objects.filter(
+            gym=self.gym,
+            recipient=self.owner,
+            notification_type='inactivity_alert',
+        ).count()
+        self.client.get(reverse('dashboard'))
+        notifications_after_second_visit = Notification.objects.filter(
+            gym=self.gym,
+            recipient=self.owner,
+            notification_type='inactivity_alert',
+        ).count()
+
+        self.assertEqual(notifications_after_first_visit, 5)
+        self.assertEqual(notifications_after_second_visit, 5)
+
     def test_dashboard_counts_distinct_members_with_current_memberships(self):
         self._sub(self.today - timedelta(days=20), self.today + timedelta(days=2), 'active')
         self._sub(self.today - timedelta(days=10), self.today + timedelta(days=10), 'active')
