@@ -1196,6 +1196,12 @@ class AdminWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'name="check_out_at"')
 
+    def test_member_action_buttons_do_not_stretch_to_check_in_form_height(self):
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'd-flex flex-wrap align-items-start gap-2')
+
     def test_reset_portal_password(self):
         self.client.post(reverse('member_add'), {
             'full_name': 'Portal Person', 'phone': '9111111111', 'plan': '', 'start_date': '',
