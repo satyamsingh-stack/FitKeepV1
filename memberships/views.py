@@ -4,6 +4,7 @@ Membership views: plans, subscriptions, renewals.
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
+from django.db.models import Q, Sum
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -350,11 +351,26 @@ def subscription_renew(request, subscription_id):
         {'id': p.id, 'price': str(p.price), 'days': p.duration_days}
         for p in form.fields['plan'].queryset
     ]
+    membership_history = MemberSubscription.objects.filter(
+        member=subscription.member,
+        gym=gym,
+    ).select_related('plan').annotate(
+        payments_received=Sum(
+            'payments__amount',
+            filter=Q(payments__status='completed'),
+        ),
+    ).order_by('-start_date', '-id')
+    payment_history = subscription.member.payments.select_related(
+        'subscription',
+        'subscription__plan',
+    ).order_by('-payment_date', '-id')
     context = {
         'gym': gym,
         'subscription': subscription,
         'form': form,
         'plans_json': plans_json,
+        'membership_history': membership_history,
+        'payment_history': payment_history,
         'method_choices': Payment.METHOD_CHOICES,
         'user_role': get_user_role(request.user, gym),
     }

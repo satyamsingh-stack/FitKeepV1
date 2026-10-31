@@ -888,6 +888,44 @@ class AdminWorkflowTests(TestCase):
         self.assertContains(response, f'value="{self.today.isoformat()}"')
         self.assertContains(response, 'value="850.00"')
 
+    def test_renewal_page_shows_member_membership_and_payment_history(self):
+        previous = self._sub(
+            self.today - timedelta(days=90),
+            self.today - timedelta(days=61),
+            'expired',
+            total=900,
+        )
+        current = self._sub(
+            self.today - timedelta(days=30),
+            self.today - timedelta(days=1),
+            'expired',
+            total=1000,
+        )
+        previous_payment_date = timezone.now() - timedelta(days=80)
+        Payment.objects.create(
+            member=self.member,
+            subscription=previous,
+            amount=450,
+            payment_date=previous_payment_date,
+            method='upi',
+            reference_number='OLD-REF-01',
+            status='completed',
+        )
+
+        response = self.client.get(reverse('subscription_renew', args=[current.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f'{previous.start_date:%d %b %Y} – {previous.end_date:%d %b %Y}',
+        )
+        self.assertContains(response, '900.00')
+        self.assertContains(response, '450.00')
+        self.assertContains(response, f'{previous_payment_date:%d %b %Y}')
+        self.assertContains(response, 'OLD-REF-01')
+        self.assertEqual(response.context['membership_history'].count(), 2)
+        self.assertEqual(response.context['payment_history'].count(), 1)
+
     def test_renewal_can_select_another_plan_and_custom_dates(self):
         sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired')
         alternate_plan = MembershipPlan.objects.create(

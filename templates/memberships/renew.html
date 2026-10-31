@@ -45,6 +45,60 @@
         <tr><td class="fw-bold">Balance</td><td class="text-end fw-bold" id="sumBal">&#8377;0</td></tr>
     </table></div></div></div>
 </div>
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong><i class="bi bi-clock-history me-2"></i>Membership history</strong><div class="small text-muted">Previous membership periods, fees, payments, and statuses for {{ subscription.member.full_name }}.</div></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Plan</th><th>Period</th><th>Fee</th><th>Discount</th><th>Paid</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for item in membership_history %}
+                            <tr>
+                                <td>{{ item.plan.name|default:"Custom plan" }}</td>
+                                <td>{{ item.start_date|date:"d M Y" }} – {{ item.end_date|date:"d M Y" }}</td>
+                                <td>&#8377;{{ item.total_amount|floatformat:2 }}</td>
+                                <td>&#8377;{{ item.discount_amount|floatformat:2 }}</td>
+                                <td>&#8377;{{ item.payments_received|default_if_none:"0.00"|floatformat:2 }}</td>
+                                <td><span class="badge bg-{% if item.status == 'active' %}success{% elif item.status == 'pending' %}warning text-dark{% else %}secondary{% endif %}">{{ item.get_status_display }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-3">No membership history found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong><i class="bi bi-receipt me-2"></i>Payment history</strong><div class="small text-muted">All recorded payments for this member, newest first.</div></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Payment date</th><th>Amount</th><th>Method</th><th>For membership</th><th>Reference</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for payment in payment_history %}
+                            <tr>
+                                <td>{{ payment.payment_date|date:"d M Y, H:i" }}</td>
+                                <td>&#8377;{{ payment.amount|floatformat:2 }}</td>
+                                <td>{{ payment.get_method_display }}</td>
+                                <td>{% if payment.subscription %}{{ payment.subscription.start_date|date:"d M Y" }} – {{ payment.subscription.end_date|date:"d M Y" }}{% else %}Unlinked{% endif %}</td>
+                                <td>{{ payment.reference_number|default:"—" }}</td>
+                                <td>{{ payment.get_status_display }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-3">No payment history found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {% block extra_js %}{{ plans_json|json_script:"plansData" }}<script>
 (function(){const $=id=>document.getElementById(id),fee=$('id_total_amount'),disc=$('id_discount_amount'),paid=$('id_amount_paid'),plan=$('id_plan'),start=$('id_start_date'),end=$('id_end_date');let mode=null,endEdited=false;
