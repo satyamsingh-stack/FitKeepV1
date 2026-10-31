@@ -5,6 +5,8 @@ from django.contrib import admin
 from django.urls import include, path
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.views.decorators.cache import never_cache
+from django.views.generic import TemplateView
 
 from accounts.views import (
     login_view, logout_view, password_reset_view, password_reset_confirm_view, password_change_view,
@@ -107,6 +109,14 @@ urlpatterns = [
     path('member/', include(('accounts.member_urls', 'member'), namespace='member')),
 
     path('admin/', admin.site.urls),
+    path(
+        'service-worker.js',
+        never_cache(TemplateView.as_view(
+            template_name='service-worker.js',
+            content_type='application/javascript',
+        )),
+        name='service_worker',
+    ),
     path('<path:unmatched_path>', page_not_found_view),
 ]
 

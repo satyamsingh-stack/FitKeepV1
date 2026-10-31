@@ -1,18 +1,24 @@
 {% extends 'base.html' %}
 {% block title %}Renew membership{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow">Membership management</div><h1>Renew membership</h1><p>Confirm the fee and record the payment in one step.</p></div>
+<div class="page-heading"><div><div class="eyebrow">Membership management</div><h1>Renew membership</h1><p>Select the renewal plan and dates, then confirm the fee and payment.</p></div>
     <a href="{% url 'member_detail' subscription.member.member_id %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>{{ subscription.member.full_name }}</a></div>
 <div class="row g-4">
     <div class="col-lg-7">
         <div class="card"><div class="card-body p-4">
-            <div class="mb-3"><strong>{{ subscription.member.full_name }}</strong><div class="text-muted small">{{ subscription.plan.name|default:"Custom" }} &middot; current period ends {{ subscription.end_date|date:"d M Y" }}</div><div class="form-text">Renewal keeps this membership plan. To change the plan, edit the membership before renewing.</div></div>
-            <div class="alert alert-info py-2"><i class="bi bi-calendar-check me-1"></i> New period: <strong>{{ new_start|date:"d M Y" }}</strong> to <strong>{{ new_end|date:"d M Y" }}</strong> (no gap, no overlap)</div>
+            <div class="mb-3"><strong>{{ subscription.member.full_name }}</strong><div class="text-muted small">{{ subscription.plan.name|default:"Custom" }} &middot; current period ends {{ subscription.end_date|date:"d M Y" }}</div></div>
             <form method="POST">
                 {% csrf_token %}
+                {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+                <div class="mb-3"><label class="form-label" for="{{ form.plan.id_for_label }}">Membership plan</label>{{ form.plan }}{{ form.plan.errors }}</div>
                 <div class="row g-3">
-                    <div class="col-md-6"><label class="form-label" for="total_amount">Fee (&#8377;)</label><input class="form-control" id="total_amount" name="total_amount" type="number" min="0" step="0.01" value="{{ default_fee|stringformat:'.2f' }}"></div>
-                    <div class="col-md-6"><label class="form-label" for="discount_amount">Discount (&#8377;)</label><input class="form-control" id="discount_amount" name="discount_amount" type="number" min="0" step="0.01" value="0"></div>
+                    <div class="col-md-6"><label class="form-label" for="{{ form.start_date.id_for_label }}">Start date</label>{{ form.start_date }}{{ form.start_date.errors }}</div>
+                    <div class="col-md-6"><label class="form-label" for="{{ form.end_date.id_for_label }}">End date</label>{{ form.end_date }}{{ form.end_date.errors }}</div>
+                </div>
+                <div class="alert alert-info py-2 mt-3"><i class="bi bi-calendar-check me-1"></i> New period: <strong id="periodStart"></strong> to <strong id="periodEnd"></strong></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="{{ form.total_amount.id_for_label }}">Fee (&#8377;)</label>{{ form.total_amount }}{{ form.total_amount.errors }}</div>
+                    <div class="col-md-6"><label class="form-label" for="{{ form.discount_amount.id_for_label }}">Discount (&#8377;)</label>{{ form.discount_amount }}{{ form.discount_amount.errors }}</div>
                 </div>
                 <hr>
                 <div class="btn-group mb-3 flex-wrap" role="group">
@@ -20,9 +26,9 @@
                     <button type="button" class="btn btn-outline-secondary" data-pay="none"><i class="bi bi-clock me-1"></i>Pay later</button>
                 </div>
                 <div class="row g-3">
-                    <div class="col-md-4"><label class="form-label" for="amount_paid">Amount received (&#8377;)</label><input class="form-control" id="amount_paid" name="amount_paid" type="number" min="0" step="0.01" value="0"></div>
-                    <div class="col-md-4"><label class="form-label" for="payment_method">Method</label><select class="form-select" id="payment_method" name="payment_method">{% for value,label in method_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
-                    <div class="col-md-4"><label class="form-label" for="reference_number">Reference</label><input class="form-control" id="reference_number" name="reference_number" maxlength="100"></div>
+                    <div class="col-md-4"><label class="form-label" for="{{ form.amount_paid.id_for_label }}">Amount received (&#8377;)</label>{{ form.amount_paid }}{{ form.amount_paid.errors }}</div>
+                    <div class="col-md-4"><label class="form-label" for="{{ form.payment_method.id_for_label }}">Method</label>{{ form.payment_method }}{{ form.payment_method.errors }}</div>
+                    <div class="col-md-4"><label class="form-label" for="{{ form.reference_number.id_for_label }}">Reference</label>{{ form.reference_number }}{{ form.reference_number.errors }}</div>
                 </div>
                 <div class="d-flex gap-2 mt-4">
                     <button type="submit" class="btn btn-success"><i class="bi bi-arrow-repeat me-1"></i>Confirm renewal</button>
@@ -40,10 +46,16 @@
     </table></div></div></div>
 </div>
 {% endblock %}
-{% block extra_js %}<script>
-(function(){const $=id=>document.getElementById(id),fee=$('total_amount'),disc=$('discount_amount'),paid=$('amount_paid');let mode=null;
+{% block extra_js %}{{ plans_json|json_script:"plansData" }}<script>
+(function(){const $=id=>document.getElementById(id),fee=$('id_total_amount'),disc=$('id_discount_amount'),paid=$('id_amount_paid'),plan=$('id_plan'),start=$('id_start_date'),end=$('id_end_date');let mode=null,endEdited=false;
+const plans={};JSON.parse($('plansData').textContent).forEach(p=>plans[String(p.id)]=p);
 const n=e=>{const v=parseFloat(e.value);return isNaN(v)?0:v;},m=x=>'\u20B9'+(Math.round(x*100)/100).toLocaleString('en-IN');
-function sum(){const due=Math.max(n(fee)-n(disc),0);$('sumFee').textContent=m(n(fee));$('sumDisc').textContent='\u2212'+m(n(disc));$('sumDue').textContent=m(due);$('sumPaid').textContent=m(n(paid));const b=$('sumBal');b.textContent=m(Math.max(due-n(paid),0));b.className='text-end fw-bold '+(due-n(paid)>0?'text-danger':'text-success');}
+function addDays(iso,days){const [y,mo,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,mo-1,d+days)).toISOString().slice(0,10);}
+function showDate(iso){if(!iso)return '—';const [y,mo,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,mo-1,d)).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});}
+function sum(){const due=Math.max(n(fee)-n(disc),0);$('sumFee').textContent=m(n(fee));$('sumDisc').textContent='\u2212'+m(n(disc));$('sumDue').textContent=m(due);$('sumPaid').textContent=m(n(paid));const b=$('sumBal');b.textContent=m(Math.max(due-n(paid),0));b.className='text-end fw-bold '+(due-n(paid)>0?'text-danger':'text-success');$('periodStart').textContent=showDate(start.value);$('periodEnd').textContent=showDate(end.value);}
+plan.addEventListener('change',function(){endEdited=false;const selected=plans[this.value];if(selected){fee.value=selected.price;if(start.value)end.value=addDays(start.value,selected.days-1);}sum();});
+start.addEventListener('change',function(){if(!endEdited){const selected=plans[plan.value];if(selected)end.value=addDays(this.value,selected.days-1);}sum();});
+end.addEventListener('input',function(){endEdited=true;sum();});
 document.querySelectorAll('[data-pay]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.pay;paid.value=mode==='full'?Math.max(n(fee)-n(disc),0):0;sum();}));
 [fee,disc].forEach(e=>e.addEventListener('input',()=>{if(mode==='full')paid.value=Math.max(n(fee)-n(disc),0);sum();}));paid.addEventListener('input',()=>{mode=null;sum();});sum();})();
 </script>{% endblock %}

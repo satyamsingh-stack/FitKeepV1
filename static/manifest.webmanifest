@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "FitKeep — Gym Retention",
+  "short_name": "FitKeep",
+  "description": "Gym member management, attendance, and retention.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111a2b",
+  "theme_color": "#111a2b",
+  "icons": [
+    {
+      "src": "/static/images/fitkeep-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

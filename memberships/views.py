@@ -10,7 +10,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 from memberships.models import MembershipPlan, MemberSubscription
-from memberships.forms import MembershipPlanForm, SubscriptionEditForm, SubscriptionForm
+from memberships.forms import MembershipPlanForm, SubscriptionEditForm, SubscriptionForm, SubscriptionRenewalForm
 from memberships.services import renew_subscription, get_expiring_subscriptions
 from members.models import MemberProfile
 from gyms.services import can_manage_members, get_user_gym, get_user_role
@@ -278,58 +278,83 @@ def subscription_renew(request, subscription_id):
     from attendance.services import get_gym_local_date
     from memberships.services import renew_with_payment
     from payments.models import Payment
-    from decimal import Decimal, InvalidOperation
-    from django.db import IntegrityError
 
     today = get_gym_local_date(gym)
     new_start = max(subscription.end_date + timedelta(days=1), today)
     plan = subscription.plan
     duration_days = plan.duration_days if plan else 30
     default_fee = subscription.total_amount
+    initial = {
+        'plan': plan,
+        'start_date': new_start,
+        'end_date': new_start + timedelta(days=duration_days - 1),
+        'total_amount': default_fee,
+        'discount_amount': 0,
+        'amount_paid': 0,
+        'payment_method': 'cash',
+    }
 
     if request.method == 'POST':
-        def money(name, default=Decimal('0')):
-            raw = (request.POST.get(name) or '').strip()
-            return Decimal(raw) if raw else default
-        try:
-            new_sub, payment = renew_with_payment(
-                subscription,
-                total_amount=money('total_amount', default_fee),
-                discount_amount=money('discount_amount'),
-                amount_paid=money('amount_paid'),
-                payment_method=request.POST.get('payment_method') or 'cash',
-                reference_number=request.POST.get('reference_number', ''),
-                recorded_by=request.user,
-            )
-        except IntegrityError:
-            messages.error(request, 'This renewal has already been created for these dates.')
-            return redirect('subscription_renew', subscription_id=subscription.id)
-        except (InvalidOperation, ValueError) as exc:
-            messages.error(request, str(exc) if isinstance(exc, ValueError) and str(exc) else 'Please enter valid amounts.')
-            return redirect('subscription_renew', subscription_id=subscription.id)
+        post_data = request.POST.copy()
+        post_defaults = {
+            'plan': plan.pk if plan else '',
+            'start_date': new_start.isoformat(),
+            'end_date': (new_start + timedelta(days=duration_days - 1)).isoformat(),
+            'total_amount': str(default_fee),
+            'discount_amount': '0',
+            'amount_paid': '0',
+            'payment_method': 'cash',
+            'reference_number': '',
+        }
+        for field, value in post_defaults.items():
+            post_data.setdefault(field, value)
+        form = SubscriptionRenewalForm(post_data, gym=gym, current_plan=plan)
+        if form.is_valid():
+            values = form.cleaned_data
+            try:
+                new_sub, payment = renew_with_payment(
+                    subscription,
+                    plan=values['plan'],
+                    total_amount=values['total_amount'],
+                    discount_amount=values['discount_amount'],
+                    amount_paid=values['amount_paid'],
+                    payment_method=values['payment_method'],
+                    reference_number=values['reference_number'],
+                    start_date=values['start_date'],
+                    end_date=values['end_date'],
+                    recorded_by=request.user,
+                )
+            except IntegrityError:
+                form.add_error(None, 'This renewal has already been created for these dates.')
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                AuditLog.log_action(
+                    actor=request.user, action='update', gym=gym, target=subscription,
+                    metadata={'action': 'renewed', 'new_subscription_id': new_sub.id},
+                )
+                if payment:
+                    AuditLog.log_action(actor=request.user, action='payment_recorded', gym=gym, target=payment)
+                note = f'Membership renewed until {new_sub.end_date:%d %b %Y}.'
+                if payment:
+                    note += f' \u20b9{payment.amount} received.'
+                due = new_sub.outstanding_balance
+                if due > 0:
+                    note += f' \u20b9{due} still due.'
+                messages.success(request, note)
+                return redirect('member_detail', member_id=subscription.member.member_id)
+    else:
+        form = SubscriptionRenewalForm(gym=gym, current_plan=plan, initial=initial)
 
-        AuditLog.log_action(
-            actor=request.user, action='update', gym=gym, target=subscription,
-            metadata={'action': 'renewed', 'new_subscription_id': new_sub.id},
-        )
-        if payment:
-            AuditLog.log_action(actor=request.user, action='payment_recorded', gym=gym, target=payment)
-        note = f'Membership renewed until {new_sub.end_date:%d %b %Y}.'
-        if payment:
-            note += f' \u20b9{payment.amount} received.'
-        due = new_sub.outstanding_balance
-        if due > 0:
-            note += f' \u20b9{due} still due.'
-        messages.success(request, note)
-        return redirect('member_detail', member_id=subscription.member.member_id)
-
+    plans_json = [
+        {'id': p.id, 'price': str(p.price), 'days': p.duration_days}
+        for p in form.fields['plan'].queryset
+    ]
     context = {
         'gym': gym,
         'subscription': subscription,
-        'new_start': new_start,
-        'new_end': new_start + timedelta(days=duration_days - 1),
-        'default_fee': default_fee,
-        'renewal_plan': plan,
+        'form': form,
+        'plans_json': plans_json,
         'method_choices': Payment.METHOD_CHOICES,
         'user_role': get_user_role(request.user, gym),
     }

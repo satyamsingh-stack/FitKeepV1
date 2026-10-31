@@ -28,6 +28,16 @@ from enquiries.models import Enquiry
 User = get_user_model()
 
 
+class PwaTests(TestCase):
+    def test_service_worker_is_available_at_the_site_root_without_caching(self):
+        response = self.client.get(reverse('service_worker'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/javascript')
+        self.assertIn('no-cache', response['Cache-Control'])
+        self.assertContains(response, "const CACHE_NAME = 'fitkeep-pwa-v1';")
+
+
 class GymServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -845,15 +855,60 @@ class AdminWorkflowTests(TestCase):
         self.assertEqual(self.member.payments.get().method, 'upi')
         self.assertEqual(new_sub.plan, self.plan)
 
-    def test_renewal_uses_current_plan_without_prompting_to_choose(self):
+    def test_renewal_form_offers_plans_and_dates_with_current_plan_defaults(self):
         sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired', total=850)
 
         response = self.client.get(reverse('subscription_renew', args=[sub.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Renewal keeps this membership plan')
+        self.assertContains(response, 'name="plan"')
+        self.assertContains(response, 'name="start_date"')
+        self.assertContains(response, 'name="end_date"')
+        self.assertContains(response, f'value="{self.plan.id}" selected')
+        self.assertContains(response, f'value="{self.today.isoformat()}"')
         self.assertContains(response, 'value="850.00"')
-        self.assertNotContains(response, 'name="plan"')
+
+    def test_renewal_can_select_another_plan_and_custom_dates(self):
+        sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired')
+        alternate_plan = MembershipPlan.objects.create(
+            gym=self.gym, name='Quarterly', duration='quarterly', duration_days=90, price=2500,
+        )
+        new_start = self.today + timedelta(days=3)
+        new_end = new_start + timedelta(days=119)
+
+        response = self.client.post(reverse('subscription_renew', args=[sub.id]), {
+            'plan': str(alternate_plan.id),
+            'start_date': new_start.isoformat(),
+            'end_date': new_end.isoformat(),
+            'total_amount': '2500',
+            'discount_amount': '100',
+            'amount_paid': '400',
+            'payment_method': 'upi',
+        })
+
+        self.assertRedirects(response, reverse('member_detail', args=[self.member.member_id]))
+        renewal = MemberSubscription.objects.get(previous_subscription=sub)
+        self.assertEqual(renewal.plan, alternate_plan)
+        self.assertEqual(renewal.start_date, new_start)
+        self.assertEqual(renewal.end_date, new_end)
+        self.assertEqual(renewal.total_amount, 2500)
+
+    def test_renewal_rejects_end_date_before_start_date(self):
+        sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired')
+
+        response = self.client.post(reverse('subscription_renew', args=[sub.id]), {
+            'plan': str(self.plan.id),
+            'start_date': self.today.isoformat(),
+            'end_date': (self.today - timedelta(days=1)).isoformat(),
+            'total_amount': '1000',
+            'discount_amount': '0',
+            'amount_paid': '0',
+            'payment_method': 'cash',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'End date must be on or after the start date.')
+        self.assertFalse(MemberSubscription.objects.filter(previous_subscription=sub).exists())
 
     def test_membership_can_be_edited_without_changing_payment_history(self):
         from payments.models import Payment

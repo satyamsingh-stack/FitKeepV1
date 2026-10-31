@@ -133,6 +133,48 @@ class SubscriptionEditForm(forms.ModelForm):
         return cleaned
 
 
+class SubscriptionRenewalForm(forms.Form):
+    """Choose the plan, dates, and payment details for a membership renewal."""
+
+    plan = forms.ModelChoiceField(
+        queryset=MembershipPlan.objects.none(),
+        required=False,
+        empty_label=_('Keep current plan'),
+    )
+    start_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    end_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    total_amount = forms.DecimalField(max_digits=10, decimal_places=2, min_value=0)
+    discount_amount = forms.DecimalField(max_digits=10, decimal_places=2, min_value=0, initial=0)
+    amount_paid = forms.DecimalField(max_digits=10, decimal_places=2, min_value=0, initial=0)
+    payment_method = forms.ChoiceField(choices=Payment.METHOD_CHOICES)
+    reference_number = forms.CharField(max_length=100, required=False)
+
+    def __init__(self, *args, gym, current_plan=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        plans = MembershipPlan.objects.filter(gym=gym, is_active=True)
+        if current_plan and not current_plan.is_active:
+            plans = plans | MembershipPlan.objects.filter(gym=gym, pk=current_plan.pk)
+        self.fields['plan'].queryset = plans.order_by('name')
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
+
+    def clean(self):
+        cleaned = super().clean()
+        start_date = cleaned.get('start_date')
+        end_date = cleaned.get('end_date')
+        total_amount = cleaned.get('total_amount')
+        discount_amount = cleaned.get('discount_amount')
+        amount_paid = cleaned.get('amount_paid')
+        if start_date and end_date and end_date < start_date:
+            self.add_error('end_date', _('End date must be on or after the start date.'))
+        if total_amount is not None and discount_amount is not None:
+            if discount_amount > total_amount:
+                self.add_error('discount_amount', _('Discount cannot exceed the membership fee.'))
+            elif amount_paid is not None and amount_paid > total_amount - discount_amount:
+                self.add_error('amount_paid', _('Amount paid cannot exceed the amount due.'))
+        return cleaned
+
+
 class PaymentForm(forms.ModelForm):
     """Form for recording payments."""
 
