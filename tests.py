@@ -1,8 +1,10 @@
 """
 Tests for the Gym Retention & Attendance SaaS platform.
 """
+import json
 import re
 
+from django.contrib.staticfiles import finders
 from django.test import Client, TestCase
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -29,13 +31,31 @@ User = get_user_model()
 
 
 class PwaTests(TestCase):
+    def test_homepage_links_to_the_pwa_manifest(self):
+        response = self.client.get(reverse('landing'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<link rel="manifest" href="/static/manifest.webmanifest">')
+
+    def test_manifest_declares_android_icon_sizes(self):
+        manifest_path = finders.find('manifest.webmanifest')
+        with open(manifest_path, encoding='utf-8') as manifest_file:
+            manifest = json.load(manifest_file)
+
+        icons = {icon['sizes']: icon for icon in manifest['icons']}
+        for size in ('192x192', '512x512'):
+            with self.subTest(size=size):
+                icon = icons[size]
+                self.assertEqual(icon['type'], 'image/png')
+                self.assertIsNotNone(finders.find(icon['src'].removeprefix('/static/')))
+
     def test_service_worker_is_available_at_the_site_root_without_caching(self):
         response = self.client.get(reverse('service_worker'))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/javascript')
         self.assertIn('no-cache', response['Cache-Control'])
-        self.assertContains(response, "const CACHE_NAME = 'fitkeep-pwa-v1';")
+        self.assertContains(response, "const CACHE_NAME = 'fitkeep-pwa-v2';")
 
 
 class GymServiceTests(TestCase):

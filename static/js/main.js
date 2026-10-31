@@ -1,9 +1,4 @@
 (function(){
-    const manifestLink=document.createElement('link');
-    manifestLink.rel='manifest';
-    manifestLink.href='/static/manifest.webmanifest';
-    document.head.appendChild(manifestLink);
-
     const appleMobileMeta=document.createElement('meta');
     appleMobileMeta.name='apple-mobile-web-app-capable';
     appleMobileMeta.content='yes';

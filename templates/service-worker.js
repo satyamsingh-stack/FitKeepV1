@@ -1,11 +1,12 @@
 'use strict';
 
-const CACHE_NAME = 'fitkeep-pwa-v1';
+const CACHE_NAME = 'fitkeep-pwa-v2';
 const APP_SHELL = [
     '/static/css/main.css',
     '/static/js/main.js',
     '/static/manifest.webmanifest',
-    '/static/images/fitkeep-icon.svg',
+    '/static/images/fitkeep-icon-192.png',
+    '/static/images/fitkeep-icon-512.png',
     '/static/pwa-offline.html',
 ];
 
