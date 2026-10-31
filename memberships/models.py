@@ -51,9 +51,7 @@ class MemberSubscription(models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('expired', 'Expired'),
-        ('cancelled', 'Cancelled'),
-        ('paused', 'Paused'),
-        ('pending', 'Pending'),
+        ('yet_to_start', 'Yet to start'),
     ]
 
     member = models.ForeignKey(MemberProfile, on_delete=models.CASCADE, related_name='subscriptions')
@@ -96,6 +94,16 @@ class MemberSubscription(models.Model):
     def save(self, *args, **kwargs):
         if not self.gym_id:
             self.gym = self.member.gym
+        from attendance.services import get_gym_local_date
+        today = get_gym_local_date(self.gym)
+        if self.end_date < today:
+            self.status = 'expired'
+        elif self.start_date > today:
+            self.status = 'yet_to_start'
+        else:
+            self.status = 'active'
+        if kwargs.get('update_fields') is not None:
+            kwargs['update_fields'] = set(kwargs['update_fields']) | {'status'}
         super().save(*args, **kwargs)
 
     def clean(self):
@@ -106,7 +114,7 @@ class MemberSubscription(models.Model):
             member_id=self.member_id,
             start_date__lte=self.end_date,
             end_date__gte=self.start_date,
-        ).exclude(status='cancelled')
+        )
         if self.pk:
             overlapping = overlapping.exclude(pk=self.pk)
         existing = overlapping.order_by('start_date').first()
@@ -141,7 +149,7 @@ class MemberSubscription(models.Model):
         new_start_date = new_start_date or (self.end_date + timedelta(days=1))
         from attendance.services import get_gym_local_date
         today = get_gym_local_date(self.gym)
-        new_status = 'pending' if new_start_date > today else ('expired' if new_end_date < today else 'active')
+        new_status = 'yet_to_start' if new_start_date > today else ('expired' if new_end_date < today else 'active')
         new_sub = MemberSubscription(
             member=self.member,
             plan=plan or self.plan,

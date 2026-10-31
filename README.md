@@ -10,6 +10,7 @@ FitKeep helps gym owners manage members, record attendance, follow up with inact
 - Attendance check-in, gym-specific QR codes, and daily duplicate prevention.
 - Attendance records include an expected end time; live occupancy counts visits only until that time.
 - Membership periods for the same member cannot overlap; back-to-back renewals remain valid.
+- Membership status is date-based: future periods are "Yet to start", inclusive current periods are "Active", and past periods are "Expired".
 - Inactivity risk calculation using each gym's configured thresholds.
 - Contact logs and follow-up tracking for retention calls.
 - Membership plans, subscription renewals, payment records, and outstanding balances.

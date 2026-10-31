@@ -61,7 +61,7 @@
                                 <td>&#8377;{{ item.total_amount|floatformat:2 }}</td>
                                 <td>&#8377;{{ item.discount_amount|floatformat:2 }}</td>
                                 <td>&#8377;{{ item.payments_received|default_if_none:"0.00"|floatformat:2 }}</td>
-                                <td><span class="badge bg-{% if item.status == 'active' %}success{% elif item.status == 'pending' %}warning text-dark{% else %}secondary{% endif %}">{{ item.get_status_display }}</span></td>
+                                <td><span class="badge bg-{% if item.status == 'active' %}success{% elif item.status == 'yet_to_start' %}info{% else %}secondary{% endif %}">{{ item.get_status_display }}</span></td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="6" class="text-center text-muted py-3">No membership history found.</td></tr>

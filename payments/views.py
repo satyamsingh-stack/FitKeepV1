@@ -94,7 +94,7 @@ def payment_add(request):
     from attendance.services import get_gym_local_date
     sync_subscription_statuses(gym=gym)
     members = MemberProfile.objects.filter(gym=gym, status='active').order_by('full_name')
-    subscriptions = MemberSubscription.objects.filter(gym=gym, status__in=['active', 'pending']).select_related('member', 'plan').order_by('member__full_name')
+    subscriptions = MemberSubscription.objects.filter(gym=gym, status__in=['active', 'yet_to_start']).select_related('member', 'plan').order_by('member__full_name')
     context = {
         'gym': gym,
         'members': members,

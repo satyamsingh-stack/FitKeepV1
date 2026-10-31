@@ -58,7 +58,7 @@
                     <td><span class="badge bg-{% if member.status == 'active' %}success{% elif member.status == 'inactive' %}secondary{% elif member.status == 'paused' %}warning{% else %}danger{% endif %}">{{ member.status }}</span></td>
                     <td>
                         {% if member.current_sub %}
-                            <span class="badge bg-{% if member.current_sub.status == 'active' %}success{% elif member.current_sub.status == 'pending' %}info{% else %}secondary{% endif %}">{{ member.current_sub.status }}</span>
+                            <span class="badge bg-{% if member.current_sub.status == 'active' %}success{% elif member.current_sub.status == 'yet_to_start' %}info{% else %}secondary{% endif %}">{{ member.current_sub.get_status_display }}</span>
                             <span class="small text-muted d-block">{{ member.current_sub.plan.name|default:"Custom" }} &middot; till {{ member.current_sub.end_date|date:"d M Y" }}</span>
                         {% else %}
                             <a href="{% url 'subscription_add' %}?member={{ member.pk }}" class="small">Assign membership</a>

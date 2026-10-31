@@ -41,10 +41,10 @@ def subscription_status_for(gym, start_date, end_date):
     """Pending if it starts in the future, expired if already over, otherwise active."""
     from attendance.services import get_gym_local_date
     today = get_gym_local_date(gym)
-    if start_date > today:
-        return 'pending'
     if end_date < today:
         return 'expired'
+    if start_date > today:
+        return 'yet_to_start'
     return 'active'
 
 

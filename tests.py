@@ -784,10 +784,10 @@ class MemberOnboardingTests(TestCase):
         self.assertEqual(sub.end_date, end)
         self.assertEqual(sub.outstanding_balance, 0)
 
-    def test_future_start_date_is_pending(self):
+    def test_future_start_date_is_yet_to_start(self):
         future = self.today + timedelta(days=5)
         self._post(start_date=future.isoformat())
-        self.assertEqual(MemberSubscription.objects.get(member__phone='9876543210').status, 'pending')
+        self.assertEqual(MemberSubscription.objects.get(member__phone='9876543210').status, 'yet_to_start')
 
     def test_overpayment_is_rejected_and_nothing_is_saved(self):
         response = self._post(amount_paid='2000')
@@ -900,22 +900,59 @@ class AdminWorkflowTests(TestCase):
         self.member.refresh_from_db()
         self.assertEqual(self.member.status, 'active')
 
-    def test_pending_membership_activates_when_it_starts(self):
+    def test_membership_starting_today_is_active(self):
         from memberships.services import sync_subscription_statuses
-        sub = self._sub(self.today, self.today + timedelta(days=29), 'pending')
+        sub = self._sub(self.today, self.today + timedelta(days=29), 'yet_to_start')
         sync_subscription_statuses(gym=self.gym)
         sub.refresh_from_db()
         self.assertEqual(sub.status, 'active')
 
-    def test_paused_and_cancelled_are_never_touched(self):
+    def test_membership_status_is_derived_from_inclusive_validity_dates(self):
         from memberships.services import sync_subscription_statuses
-        paused = self._sub(self.today - timedelta(days=5), self.today + timedelta(days=5), 'paused')
-        sync_subscription_statuses(gym=self.gym)
-        paused.refresh_from_db()
-        self.assertEqual(paused.status, 'paused')
+        currently_valid = self._sub(self.today - timedelta(days=5), self.today + timedelta(days=5), 'active')
+        upcoming_member = MemberProfile.objects.create(
+            gym=self.gym,
+            full_name='Upcoming member',
+            phone='9000000006',
+            status='active',
+        )
+        upcoming = MemberSubscription.objects.create(
+            member=upcoming_member,
+            plan=self.plan,
+            gym=self.gym,
+            start_date=self.today + timedelta(days=1),
+            end_date=self.today + timedelta(days=30),
+            total_amount=1000,
+            status='cancelled',
+        )
+        MemberSubscription.objects.filter(pk=currently_valid.pk).update(status='paused')
+        ending_today_member = MemberProfile.objects.create(
+            gym=self.gym,
+            full_name='Ending today member',
+            phone='9000000007',
+            status='active',
+        )
+        ending_today = MemberSubscription.objects.create(
+            member=ending_today_member,
+            plan=self.plan,
+            gym=self.gym,
+            start_date=self.today - timedelta(days=10),
+            end_date=self.today,
+            total_amount=1000,
+            status='expired',
+        )
 
-    def test_member_can_check_in_when_pending_membership_starts_today(self):
-        self._sub(self.today, self.today + timedelta(days=29), 'pending')
+        sync_subscription_statuses(gym=self.gym)
+        currently_valid.refresh_from_db()
+        upcoming.refresh_from_db()
+        ending_today.refresh_from_db()
+        self.assertEqual(currently_valid.status, 'active')
+        self.assertEqual(upcoming.status, 'yet_to_start')
+        self.assertEqual(ending_today.status, 'active')
+        self.assertEqual(upcoming_member.status, 'active')
+
+    def test_member_can_check_in_when_membership_starts_today(self):
+        self._sub(self.today, self.today + timedelta(days=29), 'yet_to_start')
         result = check_in_member(
             self.member, self.gym,
             check_out_at=timezone.now() + timedelta(hours=2),
@@ -1238,6 +1275,24 @@ class AdminWorkflowTests(TestCase):
         for params in ({}, {'filter': 'expiring'}, {'filter': 'due'}, {'search': 'Ravi'}, {'status': 'expired'}):
             self.assertEqual(self.client.get(reverse('subscription_list'), params).status_code, 200)
         self.assertContains(self.client.get(reverse('subscription_list'), {'filter': 'due'}), 'Ravi Kumar')
+
+    def test_subscription_list_shows_member_mobile_number(self):
+        self._sub(self.today - timedelta(days=20), self.today + timedelta(days=3), 'active')
+
+        response = self.client.get(reverse('subscription_list'))
+
+        self.assertContains(response, '9000000001')
+
+    def test_subscription_status_filter_only_offers_date_based_statuses(self):
+        response = self.client.get(reverse('subscription_list'))
+
+        self.assertContains(response, 'value="active"')
+        self.assertContains(response, 'value="expired"')
+        self.assertContains(response, 'value="yet_to_start"')
+        self.assertContains(response, 'Yet to start')
+        self.assertNotContains(response, 'value="cancelled"')
+        self.assertNotContains(response, 'value="paused"')
+        self.assertNotContains(response, 'value="pending"')
 
     def test_expired_subscription_list_includes_call_and_whatsapp_actions(self):
         self._sub(self.today - timedelta(days=40), self.today - timedelta(days=10), 'expired')

@@ -38,10 +38,10 @@
             <tbody>
                 {% for sub in subscriptions %}
                 <tr>
-                    <td><a href="{% url 'member_detail' sub.member.member_id %}" class="fw-semibold text-decoration-none">{{ sub.member.full_name }}</a></td>
+                    <td><a href="{% url 'member_detail' sub.member.member_id %}" class="fw-semibold text-decoration-none">{{ sub.member.full_name }}</a>{% if sub.member.phone %}<span class="small d-block text-muted">{{ sub.member.phone }}</span>{% endif %}</td>
                     <td>{{ sub.plan.name|default:"Custom" }}</td>
                     <td>{{ sub.start_date|date:"d M Y" }} &rarr; {{ sub.end_date|date:"d M Y" }}{% if sub.status == 'active' %}<span class="small d-block {% if sub.days_left <= 7 %}text-warning{% else %}text-muted{% endif %}">{% if sub.days_left == 0 %}ends today{% else %}{{ sub.days_left }} day{{ sub.days_left|pluralize }} left{% endif %}</span>{% endif %}</td>
-                    <td><span class="badge bg-{% if sub.status == 'active' %}success{% elif sub.status == 'expired' %}secondary{% elif sub.status == 'cancelled' %}danger{% else %}warning{% endif %}">{{ sub.status }}</span></td>
+                    <td><span class="badge bg-{% if sub.status == 'active' %}success{% elif sub.status == 'expired' %}secondary{% else %}info{% endif %}">{{ sub.get_status_display }}</span></td>
                     <td>{% if sub.balance > 0 %}<span class="text-danger fw-semibold">&#8377;{{ sub.balance }}</span>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
                     <td class="text-nowrap">
                         {% if sub.member.phone %}

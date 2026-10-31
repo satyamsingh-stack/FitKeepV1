@@ -46,23 +46,9 @@ def renew_subscription(subscription, new_end_date=None, plan=None):
     return subscription.renew(new_end_date, plan=selected_plan, new_start_date=new_start_date)
 
 
-def cancel_subscription(subscription, reason=''):
-    """
-    Cancel an active subscription.
-    """
-    subscription.status = 'cancelled'
-    subscription.notes = f'{subscription.notes}\nCancelled: {reason}'.strip()
-    subscription.save()
-    return subscription
-
-
 def sync_subscription_statuses(gym=None, member=None):
     """
-    Keep subscription statuses in step with the calendar, so nobody has to do it by hand.
-
-    - active/pending memberships whose end date has passed  -> expired
-    - pending memberships whose start date has arrived      -> active
-    Paused and cancelled memberships are never touched. Returns the number of rows changed.
+    Derive every membership status from its inclusive validity dates.
     """
     from attendance.services import get_gym_local_date
     if member is not None:
@@ -74,15 +60,18 @@ def sync_subscription_statuses(gym=None, member=None):
     if member is not None:
         qs = qs.filter(member=member)
     now = timezone.now()
-    changed = qs.filter(status__in=['active', 'pending'], end_date__lt=today).update(status='expired', updated_at=now)
-    activating_member_ids = list(
-        qs.filter(status='pending', start_date__lte=today, end_date__gte=today)
-        .values_list('member_id', flat=True)
-    )
-    changed += qs.filter(status='pending', start_date__lte=today, end_date__gte=today).update(
+    changed = qs.filter(start_date__gt=today).exclude(
+        status='yet_to_start',
+    ).update(status='yet_to_start', updated_at=now)
+    changed += qs.filter(end_date__lt=today).exclude(
+        status='expired',
+    ).update(status='expired', updated_at=now)
+    active_memberships = qs.filter(start_date__lte=today, end_date__gte=today)
+    changed += active_memberships.exclude(status='active').update(
         status='active',
         updated_at=now,
     )
+    activating_member_ids = list(active_memberships.values_list('member_id', flat=True).distinct())
 
     if activating_member_ids:
         MemberProfile.objects.filter(

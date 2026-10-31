@@ -2,7 +2,7 @@
 {% block title %}Edit membership · FitKeep{% endblock %}
 {% block content %}
 <div class="page-heading">
-    <div><div class="eyebrow">Membership management</div><h1>Edit membership</h1><p>Update plan terms and membership status. Payment history is preserved.</p></div>
+    <div><div class="eyebrow">Membership management</div><h1>Edit membership</h1><p>Update plan terms and dates. Status follows the membership validity dates automatically.</p></div>
     <a href="{% url 'subscription_list' %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>Memberships</a>
 </div>
 <div class="row">
@@ -21,7 +21,6 @@
                     <div class="col-md-6"><label class="form-label" for="{{ form.total_amount.id_for_label }}">Membership fee (₹)</label>{{ form.total_amount }}{{ form.total_amount.errors }}</div>
                     <div class="col-md-6"><label class="form-label" for="{{ form.discount_amount.id_for_label }}">Discount (₹)</label>{{ form.discount_amount }}{{ form.discount_amount.errors }}</div>
                 </div>
-                <div class="mt-3"><label class="form-label" for="{{ form.status.id_for_label }}">Status</label>{{ form.status }}{{ form.status.errors }}</div>
                 <div class="mt-3 mb-4"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}{{ form.notes.errors }}</div>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>Save changes</button>
                 <a href="{% url 'subscription_list' %}" class="btn btn-light ms-1">Cancel</a>

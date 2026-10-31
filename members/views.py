@@ -218,7 +218,7 @@ def member_detail(request, member_id):
 
     latest_subscription = subscriptions[0] if subscriptions else None
     total_due = sum(
-        (sub.outstanding_balance for sub in MemberSubscription.objects.filter(member=member, status__in=['active', 'pending'])),
+        (sub.outstanding_balance for sub in MemberSubscription.objects.filter(member=member, status__in=['active', 'yet_to_start'])),
         Decimal('0.00'),
     )
     from attendance.services import get_gym_local_date

@@ -137,7 +137,7 @@ def subscription_list(request):
 
     rows = list(subscriptions)
     if quick == 'due':
-        rows = [sub for sub in rows if sub.status in ('active', 'pending') and sub.outstanding_balance > 0]
+        rows = [sub for sub in rows if sub.status in ('active', 'yet_to_start') and sub.outstanding_balance > 0]
     for sub in rows:
         sub.balance = sub.outstanding_balance
         sub.days_left = (sub.end_date - today).days
@@ -176,7 +176,7 @@ def subscription_add(request):
             total_amount = form.cleaned_data['total_amount']
             from attendance.services import get_gym_local_date
             today = get_gym_local_date(gym)
-            status = 'pending' if start_date > today else ('expired' if end_date < today else 'active')
+            status = 'yet_to_start' if start_date > today else ('expired' if end_date < today else 'active')
             try:
                 with transaction.atomic():
                     member = MemberProfile.objects.select_for_update().get(pk=member.pk, gym=gym)
@@ -251,6 +251,8 @@ def subscription_edit(request, subscription_id):
             try:
                 with transaction.atomic():
                     updated_subscription = form.save()
+                    from memberships.services import sync_subscription_statuses
+                    sync_subscription_statuses(member=updated_subscription.member)
             except IntegrityError:
                 form.add_error(None, 'Another membership already exists for this member and date range.')
             else:
