@@ -2,7 +2,9 @@
 Member views: CRUD operations for gym members.
 """
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
@@ -107,47 +109,64 @@ def member_add(request):
             data = form.cleaned_data
             member = form.save(commit=False)
             member.status = 'active'
-            result = onboard_member(
-                gym=gym,
-                member=member,
-                plan=data.get('plan'),
-                start_date=data.get('start_date'),
-                end_date=data.get('end_date'),
-                total_amount=data.get('total_amount'),
-                discount_amount=data.get('discount_amount'),
-                amount_paid=data.get('amount_paid'),
-                payment_method=data.get('payment_method') or 'cash',
-                reference_number=data.get('reference_number', ''),
-                recorded_by=request.user,
-            )
-            subscription = result['subscription']
-            AuditLog.log_action(actor=request.user, action='create', gym=gym, target=member)
-            if subscription:
-                AuditLog.log_action(
-                    actor=request.user, action='create', gym=gym, target=subscription,
-                    metadata={'source': 'onboarding'},
+            try:
+                result = onboard_member(
+                    gym=gym,
+                    member=member,
+                    plan=data.get('plan'),
+                    start_date=data.get('start_date'),
+                    end_date=data.get('end_date'),
+                    total_amount=data.get('total_amount'),
+                    discount_amount=data.get('discount_amount'),
+                    amount_paid=data.get('amount_paid'),
+                    payment_method=data.get('payment_method') or 'cash',
+                    reference_number=data.get('reference_number', ''),
+                    recorded_by=request.user,
                 )
-            if result['payment']:
-                AuditLog.log_action(actor=request.user, action='payment_recorded', gym=gym, target=result['payment'])
-
-            parts = [f'{member.full_name} was added']
-            if subscription:
-                parts.append(f'with a membership valid until {subscription.end_date:%d %b %Y}')
-                if result['payment']:
-                    parts.append(f'and \u20b9{result["payment"].amount} received')
-                due = subscription.outstanding_balance
-                if due > 0:
-                    parts.append(f'(\u20b9{due} still due)')
-            message = ' '.join(parts) + '.'
-            if result['temporary_password']:
-                message += (
-                    f' Temporary member-portal password: {result["temporary_password"]} '
-                    '\u2014 share it privately and ask the member to change it after signing in.'
+            except IntegrityError:
+                UserModel = get_user_model()
+                email = data.get('email')
+                email_conflict = bool(
+                    email
+                    and UserModel.objects.filter(email__iexact=email)
+                    .exclude(username=data.get('phone'))
+                    .exists()
+                )
+                if not email_conflict:
+                    raise
+                form.add_error(
+                    'email',
+                    'This email is already linked to another account. Use a different email address or leave it blank.',
                 )
             else:
-                message += ' An existing account was linked to this gym.'
-            messages.success(request, message)
-            return redirect('member_detail', member_id=member.member_id)
+                subscription = result['subscription']
+                AuditLog.log_action(actor=request.user, action='create', gym=gym, target=member)
+                if subscription:
+                    AuditLog.log_action(
+                        actor=request.user, action='create', gym=gym, target=subscription,
+                        metadata={'source': 'onboarding'},
+                    )
+                if result['payment']:
+                    AuditLog.log_action(actor=request.user, action='payment_recorded', gym=gym, target=result['payment'])
+
+                parts = [f'{member.full_name} was added']
+                if subscription:
+                    parts.append(f'with a membership valid until {subscription.end_date:%d %b %Y}')
+                    if result['payment']:
+                        parts.append(f'and \u20b9{result["payment"].amount} received')
+                    due = subscription.outstanding_balance
+                    if due > 0:
+                        parts.append(f'(\u20b9{due} still due)')
+                message = ' '.join(parts) + '.'
+                if result['temporary_password']:
+                    message += (
+                        f' Temporary member-portal password: {result["temporary_password"]} '
+                        '\u2014 share it privately and ask the member to change it after signing in.'
+                    )
+                else:
+                    message += ' An existing account was linked to this gym.'
+                messages.success(request, message)
+                return redirect('member_detail', member_id=member.member_id)
     else:
         form = MemberOnboardingForm(gym=gym)
 

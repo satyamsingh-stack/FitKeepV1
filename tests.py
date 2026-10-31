@@ -751,6 +751,15 @@ class MemberOnboardingTests(TestCase):
         self.assertEqual(member.payments.count(), 1)
         self.assertEqual(sub.outstanding_balance, 0)
 
+    def test_onboarding_rejects_email_already_used_by_another_account(self):
+        response = self._post(email='OWNER@Test.com')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'already linked to another account')
+        self.assertContains(response, 'class="form-control is-invalid"')
+        self.assertFalse(MemberProfile.objects.filter(gym=self.gym, phone='9876543210').exists())
+        self.assertFalse(User.objects.filter(username='9876543210').exists())
+
     def test_partial_payment_leaves_balance_outstanding(self):
         self._post(amount_paid='500', discount_amount='100')
         sub = MemberSubscription.objects.get(member__phone='9876543210')

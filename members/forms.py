@@ -99,6 +99,26 @@ class MemberOnboardingForm(forms.ModelForm):
             raise forms.ValidationError(_('A member with this phone number already exists in your gym.'))
         return phone
 
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip()
+        if not email:
+            return email
+
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        existing_account = UserModel.objects.filter(username=self.cleaned_data.get('phone')).first()
+        if existing_account:
+            return email
+        if UserModel.objects.filter(email__iexact=email).exists():
+            self.fields['email'].widget.attrs.update({
+                'class': 'form-control is-invalid',
+                'aria-invalid': 'true',
+            })
+            raise forms.ValidationError(
+                _('This email is already linked to another account. Use a different email address or leave it blank.')
+            )
+        return email
+
     def clean(self):
         cleaned = super().clean()
         plan = cleaned.get('plan')

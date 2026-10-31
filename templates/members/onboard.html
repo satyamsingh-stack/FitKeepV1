@@ -34,7 +34,7 @@
                         <div class="form-text">{{ form.phone.help_text }}</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label" for="{{ form.email.id_for_label }}">Email <span class="text-muted fw-normal">(optional)</span></label>
+                        <label class="form-label" for="{{ form.email.id_for_label }}">Email <span class="text-muted fw-normal">(optional; must not belong to another account)</span></label>
                         {{ form.email }}{% for e in form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                     </div>
                 </div>
