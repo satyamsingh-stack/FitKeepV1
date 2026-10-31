@@ -18,18 +18,19 @@
     <div class="table-responsive mt-4">
         <table class="table table-striped">
             <thead>
-                <tr><th>Member</th><th>Date</th><th>Time</th><th>Source</th></tr>
+                <tr><th>Member</th><th>Date</th><th>Start time</th><th>End time</th><th>Source</th></tr>
             </thead>
             <tbody>
                 {% for record in records %}
                 <tr>
                     <td>{{ record.member.full_name }}</td>
                     <td>{{ record.check_in_date }}</td>
-                    <td>{{ record.check_in_at|time:"H:i" }}</td>
+                    <td>{{ record.check_in_time_local }}</td>
+                    <td>{{ record.check_out_time_local }}</td>
                     <td>{{ record.source }}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="4" class="text-center">No attendance records</td></tr>
+                <tr><td colspan="5" class="text-center">No attendance records</td></tr>
                 {% endfor %}
             </tbody>
         </table>

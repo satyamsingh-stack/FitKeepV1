@@ -16,6 +16,9 @@
                     <input id="phone" type="tel" name="phone" class="form-control mb-3"
                            value="{{ member.phone|default:'' }}" placeholder="Your registered phone number"
                            {% if not is_authenticated_member %}required{% endif %}>
+                    <label class="form-label" for="check_out_at">Expected end time</label>
+                    <input id="check_out_at" type="datetime-local" name="check_out_at"
+                           class="form-control mb-3" value="{{ default_check_out }}" required>
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="bi bi-check-circle me-2"></i>Mark my attendance
                     </button>

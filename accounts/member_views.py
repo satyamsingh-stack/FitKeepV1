@@ -13,7 +13,10 @@ from django.utils import timezone
 
 from accounts.models import GymMembership
 from gyms.services import get_active_subscription, get_member_by_phone, get_user_gym
-from attendance.services import get_streak_data, get_monthly_attendance, get_achievements
+from attendance.services import (
+    default_check_out_input, get_streak_data, get_monthly_attendance,
+    get_achievements, parse_gym_datetime,
+)
 
 
 def _get_attendance_calendar_data(member, gym):
@@ -93,6 +96,9 @@ def member_check_in(request):
     account_member = member is not None
 
     if request.method == 'POST':
+        check_out_at = parse_gym_datetime(request.POST.get('check_out_at'), gym)
+        if not check_out_at:
+            return JsonResponse({'success': False, 'error': 'Enter a valid end time.'}, status=400)
         phone = request.POST.get('phone', '').strip()
         if not member:
             member = get_member_by_phone(gym, phone)
@@ -109,6 +115,7 @@ def member_check_in(request):
         result = check_in_member(
             member,
             gym,
+            check_out_at=check_out_at,
             source='qr',
             verified=account_member,
             verification_method='member_account' if account_member else 'registered_phone',
@@ -138,6 +145,7 @@ def member_check_in(request):
         'qr_token': token,
         'member': member,
         'is_authenticated_member': member is not None,
+        'default_check_out': default_check_out_input(gym),
     })
 
 

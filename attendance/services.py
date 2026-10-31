@@ -1,7 +1,7 @@
 """
 Attendance service module: check-in logic, streaks, achievements.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
 
@@ -22,7 +22,34 @@ def get_gym_local_date(gym, value=None):
     return timezone.localtime(value, tz).date()
 
 
-def check_in_member(member, gym, source='qr', verified=False, recorded_by=None, notes='', ip_address=None, verification_method=''):
+def get_gym_timezone(gym):
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        return ZoneInfo(gym.timezone or 'UTC')
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo('UTC')
+
+
+def parse_gym_datetime(value, gym):
+    """Parse a datetime-local value as a local datetime in the gym timezone."""
+    if not value:
+        return None
+    try:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, get_gym_timezone(gym))
+    return parsed
+
+
+def default_check_out_input(gym):
+    """Return a datetime-local value two hours from now in the gym timezone."""
+    local_default = (timezone.now() + timedelta(hours=2)).astimezone(get_gym_timezone(gym))
+    return local_default.strftime('%Y-%m-%dT%H:%M')
+
+
+def check_in_member(member, gym, check_out_at=None, source='qr', verified=False, recorded_by=None, notes='', ip_address=None, verification_method=''):
     """Record one attendance per member per local gym calendar day."""
     from django.db import IntegrityError, transaction
 
@@ -32,6 +59,8 @@ def check_in_member(member, gym, source='qr', verified=False, recorded_by=None, 
         return {'success': False, 'error': 'This member is not currently active.'}
 
     now = timezone.now()
+    if not check_out_at or timezone.is_naive(check_out_at) or check_out_at <= now:
+        return {'success': False, 'error': 'Choose an end time later than now.'}
     local_date = get_gym_local_date(gym, now)
     from memberships.services import sync_subscription_statuses
     sync_subscription_statuses(member=member)
@@ -51,6 +80,7 @@ def check_in_member(member, gym, source='qr', verified=False, recorded_by=None, 
                 gym=gym,
                 member=member,
                 check_in_at=now,
+                check_out_at=check_out_at,
                 check_in_date=local_date,
                 source=source,
                 verification_status='verified' if verified else 'unverified',
@@ -71,7 +101,11 @@ def check_in_member(member, gym, source='qr', verified=False, recorded_by=None, 
         'success': True,
         'attendance_id': attendance.id,
         'check_in_at': attendance.check_in_at.isoformat(),
-        'message': 'Check-in successful!',
+        'check_out_at': attendance.check_out_at.isoformat(),
+        'message': (
+            'Check-in recorded until '
+            f'{timezone.localtime(attendance.check_out_at, get_gym_timezone(gym)):%H:%M}.'
+        ),
     }
 
 

@@ -19,7 +19,10 @@ from accounts.models import GymSettings
 from members.models import MemberProfile
 from memberships.models import MembershipPlan, MemberSubscription
 from attendance.models import Attendance
-from attendance.services import check_in_member, generate_qr_code, get_gym_local_date, get_streak_data
+from attendance.services import (
+    check_in_member, default_check_out_input, generate_qr_code,
+    get_gym_local_date, get_streak_data,
+)
 from retention.services import calculate_retention_risk, get_at_risk_members
 from payments.models import Payment
 from payments.services import record_payment, get_outstanding_payments
@@ -55,7 +58,7 @@ class PwaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/javascript')
         self.assertIn('no-cache', response['Cache-Control'])
-        self.assertContains(response, "const CACHE_NAME = 'fitkeep-pwa-v2';")
+        self.assertContains(response, "const CACHE_NAME = 'fitkeep-pwa-v3';")
 
 
 class GymServiceTests(TestCase):
@@ -134,15 +137,41 @@ class AttendanceServiceTests(TestCase):
         )
 
     def test_check_in_member(self):
-        result = check_in_member(self.member, self.gym, source='qr', verified=True)
+        result = check_in_member(
+            self.member, self.gym,
+            check_out_at=timezone.now() + timedelta(hours=2),
+            source='qr', verified=True,
+        )
         self.assertTrue(result['success'])
         self.assertEqual(Attendance.objects.count(), 1)
+        self.assertIsNotNone(Attendance.objects.get().check_out_at)
 
     def test_check_in_duplicate(self):
-        check_in_member(self.member, self.gym)
-        result = check_in_member(self.member, self.gym)
+        check_out_at = timezone.now() + timedelta(hours=2)
+        check_in_member(self.member, self.gym, check_out_at=check_out_at)
+        result = check_in_member(self.member, self.gym, check_out_at=check_out_at)
         self.assertFalse(result['success'])
         self.assertIn('Already checked in', result['error'])
+
+    def test_check_in_requires_a_future_end_time(self):
+        result = check_in_member(
+            self.member,
+            self.gym,
+            check_out_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        self.assertFalse(result['success'])
+        self.assertIn('end time later than now', result['error'])
+        self.assertFalse(Attendance.objects.exists())
+
+    def test_gym_local_datetime_input_is_converted_to_aware_time(self):
+        check_out_value = default_check_out_input(self.gym)
+
+        from attendance.services import parse_gym_datetime
+        parsed = parse_gym_datetime(check_out_value, self.gym)
+
+        self.assertIsNotNone(parsed)
+        self.assertTrue(timezone.is_aware(parsed))
 
     def test_get_streak_data(self):
         for i in range(5):
@@ -201,6 +230,7 @@ class MemberQRCheckInTests(TestCase):
         response = self.client.post(self.url, {
             'qr_token': self.qr.token_hash,
             'phone': self.member.phone,
+            'check_out_at': default_check_out_input(self.gym),
         })
 
         self.assertEqual(response.status_code, 200)
@@ -211,18 +241,33 @@ class MemberQRCheckInTests(TestCase):
         attendance = Attendance.objects.get(gym=self.gym, member=self.member)
         self.assertEqual(attendance.verification_status, 'unverified')
         self.assertEqual(attendance.verification_method, 'registered_phone')
+        self.assertIsNotNone(attendance.check_out_at)
+
+    def test_qr_check_in_requires_end_time(self):
+        self.add_active_subscription()
+
+        response = self.client.post(self.url, {
+            'qr_token': self.qr.token_hash,
+            'phone': self.member.phone,
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()['success'])
+        self.assertFalse(Attendance.objects.exists())
 
     def test_duplicate_check_in_opens_calendar_and_streak_summary(self):
         self.add_active_subscription()
         first_response = self.client.post(self.url, {
             'qr_token': self.qr.token_hash,
             'phone': self.member.phone,
+            'check_out_at': default_check_out_input(self.gym),
         })
         self.assertTrue(first_response.json()['success'])
 
         response = self.client.post(self.url, {
             'qr_token': self.qr.token_hash,
             'phone': self.member.phone,
+            'check_out_at': default_check_out_input(self.gym),
         })
 
         self.assertEqual(response.status_code, 200)
@@ -260,6 +305,7 @@ class MemberQRCheckInTests(TestCase):
         response = self.client.post(self.url, {
             'qr_token': self.qr.token_hash,
             'phone': self.member.phone,
+            'check_out_at': default_check_out_input(self.gym),
         })
 
         self.assertEqual(response.status_code, 403)
@@ -270,6 +316,7 @@ class MemberQRCheckInTests(TestCase):
         response = self.client.post(self.url, {
             'qr_token': self.qr.token_hash,
             'phone': self.member.phone,
+            'check_out_at': default_check_out_input(self.gym),
         })
 
         self.assertEqual(response.status_code, 403)
@@ -287,7 +334,10 @@ class MemberQRCheckInTests(TestCase):
         GymMembership.objects.create(user=user, gym=self.gym, role='member', status='active')
         self.client.force_login(user)
 
-        response = self.client.post(self.url, {'qr_token': self.qr.token_hash})
+        response = self.client.post(self.url, {
+            'qr_token': self.qr.token_hash,
+            'check_out_at': default_check_out_input(self.gym),
+        })
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()['success'])
@@ -857,8 +907,35 @@ class AdminWorkflowTests(TestCase):
 
     def test_member_can_check_in_when_pending_membership_starts_today(self):
         self._sub(self.today, self.today + timedelta(days=29), 'pending')
-        result = check_in_member(self.member, self.gym, source='manual', verified=True, recorded_by=self.owner)
+        result = check_in_member(
+            self.member, self.gym,
+            check_out_at=timezone.now() + timedelta(hours=2),
+            source='manual', verified=True, recorded_by=self.owner,
+        )
         self.assertTrue(result['success'])
+
+    def test_front_desk_check_in_stores_selected_end_time(self):
+        end_time = default_check_out_input(self.gym)
+
+        response = self.client.post(reverse('check_in'), {
+            'phone': self.member.phone,
+            'check_out_at': end_time,
+        }, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        attendance = Attendance.objects.get(member=self.member)
+        self.assertIsNotNone(attendance.check_out_at)
+        self.assertIn('recorded until', response.json()['message'])
+
+    def test_brand_logo_links_to_overview_for_authenticated_gym_users(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f'class="navbar-brand brand-mark" href="{reverse("dashboard")}"',
+        )
 
     # --- renew + pay ---------------------------------------------------------------
     def test_renewal_with_payment_in_one_step(self):
@@ -874,6 +951,22 @@ class AdminWorkflowTests(TestCase):
         self.assertEqual(new_sub.outstanding_balance, 500)
         self.assertEqual(self.member.payments.get().method, 'upi')
         self.assertEqual(new_sub.plan, self.plan)
+
+    def test_renewal_rejects_a_period_overlapping_another_membership(self):
+        expired = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired')
+        self._sub(self.today, self.today + timedelta(days=10), 'active')
+
+        response = self.client.post(reverse('subscription_renew', args=[expired.id]), {
+            'total_amount': '1000',
+            'discount_amount': '0',
+            'amount_paid': '0',
+            'payment_method': 'cash',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'overlaps an existing membership')
+        self.assertEqual(MemberSubscription.objects.filter(member=self.member).count(), 2)
+
 
     def test_renewal_form_offers_plans_and_dates_with_current_plan_defaults(self):
         sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired', total=850)
@@ -925,6 +1018,41 @@ class AdminWorkflowTests(TestCase):
         self.assertContains(response, 'OLD-REF-01')
         self.assertEqual(response.context['membership_history'].count(), 2)
         self.assertEqual(response.context['payment_history'].count(), 1)
+
+    def test_subscription_assignment_rejects_overlapping_membership_dates(self):
+        existing = self._sub(self.today, self.today + timedelta(days=29), 'active')
+
+        response = self.client.post(reverse('subscription_add'), {
+            'member': str(self.member.pk),
+            'plan': str(self.plan.pk),
+            'start_date': self.today.isoformat(),
+            'end_date': (self.today + timedelta(days=29)).isoformat(),
+            'total_amount': '1000',
+            'discount_amount': '0',
+            'notes': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'overlaps an existing membership')
+        self.assertEqual(MemberSubscription.objects.filter(member=self.member).count(), 1)
+        self.assertTrue(MemberSubscription.objects.filter(pk=existing.pk).exists())
+
+    def test_subscription_assignment_allows_back_to_back_memberships(self):
+        self._sub(self.today, self.today + timedelta(days=29), 'active')
+        next_start = self.today + timedelta(days=30)
+
+        response = self.client.post(reverse('subscription_add'), {
+            'member': str(self.member.pk),
+            'plan': str(self.plan.pk),
+            'start_date': next_start.isoformat(),
+            'end_date': (next_start + timedelta(days=29)).isoformat(),
+            'total_amount': '1000',
+            'discount_amount': '0',
+            'notes': '',
+        })
+
+        self.assertRedirects(response, reverse('subscription_list'))
+        self.assertEqual(MemberSubscription.objects.filter(member=self.member).count(), 2)
 
     def test_renewal_can_select_another_plan_and_custom_dates(self):
         sub = self._sub(self.today - timedelta(days=30), self.today - timedelta(days=1), 'expired')
@@ -1047,8 +1175,17 @@ class AdminWorkflowTests(TestCase):
     # --- one-click actions ---------------------------------------------------------
     def test_mark_present_from_member_page(self):
         self._sub(self.today - timedelta(days=1), self.today + timedelta(days=28), 'active')
-        self.client.post(reverse('member_check_in', args=[self.member.member_id]))
+        response = self.client.post(reverse('member_check_in', args=[self.member.member_id]))
+
+        self.assertRedirects(response, reverse('member_detail', args=[self.member.member_id]))
         self.assertTrue(Attendance.objects.filter(member=self.member, check_in_date=self.today).exists())
+        self.assertIsNotNone(Attendance.objects.get(member=self.member).check_out_at)
+
+    def test_member_directory_check_in_action_has_no_end_time_input(self):
+        response = self.client.get(reverse('member_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="check_out_at"')
 
     def test_reset_portal_password(self):
         self.client.post(reverse('member_add'), {
@@ -1190,6 +1327,66 @@ class AdminWorkflowTests(TestCase):
 
         self.assertContains(response, 'Live occupancy')
         self.assertContains(response, '1')
+
+    def test_dashboard_excludes_visits_that_have_reached_their_end_time(self):
+        now = timezone.now()
+        Attendance.objects.create(
+            gym=self.gym,
+            member=self.member,
+            check_in_date=self.today,
+            check_in_at=now - timedelta(hours=2),
+            check_out_at=now - timedelta(minutes=1),
+            source='qr',
+        )
+        current_member = MemberProfile.objects.create(
+            gym=self.gym,
+            full_name='Current visitor',
+            phone='9000000004',
+            status='active',
+        )
+        Attendance.objects.create(
+            gym=self.gym,
+            member=current_member,
+            check_in_date=self.today,
+            check_in_at=now - timedelta(minutes=30),
+            check_out_at=now + timedelta(hours=1),
+            source='qr',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['live_occupancy'], 1)
+
+    def test_dashboard_live_occupancy_only_includes_check_ins_from_last_two_hours(self):
+        now = timezone.now()
+        recent_member = self.member
+        older_member = MemberProfile.objects.create(
+            gym=self.gym,
+            full_name='Earlier visitor',
+            phone='9000000005',
+            status='active',
+        )
+        Attendance.objects.create(
+            gym=self.gym,
+            member=recent_member,
+            check_in_date=self.today,
+            check_in_at=now - timedelta(minutes=90),
+            check_out_at=now + timedelta(hours=1),
+            source='qr',
+        )
+        Attendance.objects.create(
+            gym=self.gym,
+            member=older_member,
+            check_in_date=self.today,
+            check_in_at=now - timedelta(hours=3),
+            check_out_at=now + timedelta(hours=1),
+            source='qr',
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['live_occupancy'], 1)
+        self.assertContains(response, 'last 2 hours')
 
     def test_dashboard_renders_attendance_chart_as_svg(self):
         Attendance.objects.create(

@@ -26,25 +26,26 @@ h2,h3,h4,h5{font-weight:800}
 p{color:#4f5b7a}
 a{text-decoration:none}
 .app-navbar{min-height:78px;background:linear-gradient(90deg,rgba(11,16,38,.98) 0%,rgba(28,19,64,.98) 50%,rgba(11,16,38,.98) 100%)!important;backdrop-filter:blur(12px) saturate(120%);-webkit-backdrop-filter:blur(12px) saturate(120%);padding:.7rem 0;box-shadow:0 10px 60px -20px rgba(124,63,255,.4);border-bottom:1px solid rgba(148,163,184,.18);position:sticky;top:0;z-index:1030;display:flex!important}
-.public-body .app-navbar{background:rgba(255,255,255,.92);backdrop-filter:blur(14px) saturate(120%);-webkit-backdrop-filter:blur(14px) saturate(120%);border-bottom:1px solid rgba(148,163,184,.16);box-shadow:0 10px 40px -25px rgba(15,23,42,.9)}
+.public-body .app-navbar{background:linear-gradient(90deg,rgba(11,16,38,.98) 0%,rgba(28,19,64,.98) 50%,rgba(11,16,38,.98) 100%);backdrop-filter:blur(14px) saturate(120%);-webkit-backdrop-filter:blur(14px) saturate(120%);border-bottom:1px solid rgba(148,163,184,.18);box-shadow:0 10px 60px -20px rgba(124,63,255,.4)}
 .brand-mark{display:flex;align-items:center;gap:12px;color:#fff!important;font-size:1.32rem;font-weight:800;line-height:1;transition:transform .2s ease}
 .brand-mark:hover{transform:translateY(-1px)}
-.public-body .brand-mark{color:var(--ink)!important}
+.public-body .brand-mark{color:#fff!important}
+.public-body .app-navbar .navbar-brand.brand-mark>span:last-child{color:#fff!important}
 .brand-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:radial-gradient(circle at 30% 30%,#a78bfa,#7c3fff);box-shadow:0 15px 40px -15px rgba(124,63,255,.9);color:#fff;font-size:1.28rem;position:relative;overflow:hidden}
 .brand-icon::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 70% 0,rgba(255,255,255,.25),transparent)}
 .brand-dot{color:#a78bfa}
 .brand-mark small{display:block;font:700 .5rem 'DM Sans',sans-serif;letter-spacing:.22em;color:rgba(226,232,255,.7);margin-top:6px}
-.public-body .brand-mark small{color:#8a94a7}
+.public-body .brand-mark small{color:#fff!important}
 .app-nav-links{gap:.25rem}
 .app-navbar .nav-link{color:rgba(226,232,255,.78);padding:.65rem .9rem!important;border-radius:999px;font-weight:600;font-size:.88rem;display:flex;align-items:center;gap:.4rem;transition:all .2s ease}
-.public-body .app-navbar .nav-link{color:#4e596d}
+.public-body .app-navbar .nav-link{color:#fff!important}
 .app-navbar .nav-link i{font-size:1rem}
 .app-navbar .nav-link:hover,.app-navbar .nav-link.active{color:#fff;background:radial-gradient(circle at top,rgba(167,139,250,.32),rgba(124,63,255,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
-.public-body .app-navbar .nav-link:hover,.public-body .app-navbar .nav-link.active{color:var(--brand);background:linear-gradient(90deg,rgba(124,63,255,.12) 0%,rgba(34,211,238,.1) 100%);box-shadow:none}
+.public-body .app-navbar .nav-link:hover,.public-body .app-navbar .nav-link.active,.public-body .app-navbar .nav-link:focus{color:#fff!important;background:radial-gradient(circle at top,rgba(167,139,250,.32),rgba(124,63,255,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
 .app-navbar .navbar-toggler{border:1px solid rgba(255,255,255,.4);border-radius:999px;padding:.4rem .6rem}
 .app-navbar .navbar-toggler-icon{filter:brightness(0) invert(1)}
-.public-body .navbar-toggler{border-color:rgba(148,163,184,.6)}
-.public-body .navbar-toggler-icon{filter:none}
+.public-body .navbar-toggler{border-color:rgba(255,255,255,.4)}
+.public-body .navbar-toggler-icon{filter:brightness(0) invert(1)}
 .btn-brand,.btn-primary{background:linear-gradient(90deg,var(--brand) 0%,#8b5cf6 40%,var(--brand-2) 140%);border:none;color:#fff!important;font-weight:700;border-radius:999px;box-shadow:0 20px 40px -18px rgba(124,63,255,.9);padding:.68rem 1.6rem;display:inline-flex;align-items:center;gap:.4rem;transition:all .2s ease}
 .btn-brand:hover,.btn-primary:hover{filter:brightness(1.05);transform:translateY(-2px);box-shadow:0 25px 50px -18px rgba(124,63,255,1)}
 .btn{border-radius:999px;font-weight:650;padding:.62rem 1.2rem;transition:all .2s ease;border-width:1px}

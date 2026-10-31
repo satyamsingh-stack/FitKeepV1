@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 
 from members.models import MemberProfile
 
@@ -97,6 +98,26 @@ class MemberSubscription(models.Model):
             self.gym = self.member.gym
         super().save(*args, **kwargs)
 
+    def clean(self):
+        super().clean()
+        if not self.member_id or not self.start_date or not self.end_date:
+            return
+        overlapping = MemberSubscription.objects.filter(
+            member_id=self.member_id,
+            start_date__lte=self.end_date,
+            end_date__gte=self.start_date,
+        ).exclude(status='cancelled')
+        if self.pk:
+            overlapping = overlapping.exclude(pk=self.pk)
+        existing = overlapping.order_by('start_date').first()
+        if existing:
+            raise ValidationError({
+                'start_date': (
+                    f'This period overlaps an existing membership '
+                    f'({existing.start_date:%d %b %Y} to {existing.end_date:%d %b %Y}).'
+                ),
+            })
+
     @property
     def outstanding_balance(self):
         from decimal import Decimal
@@ -121,7 +142,7 @@ class MemberSubscription(models.Model):
         from attendance.services import get_gym_local_date
         today = get_gym_local_date(self.gym)
         new_status = 'pending' if new_start_date > today else ('expired' if new_end_date < today else 'active')
-        new_sub = MemberSubscription.objects.create(
+        new_sub = MemberSubscription(
             member=self.member,
             plan=plan or self.plan,
             gym=self.gym,
@@ -132,6 +153,8 @@ class MemberSubscription(models.Model):
             previous_subscription=self,
             renewal_count=self.renewal_count + 1,
         )
+        new_sub.full_clean()
+        new_sub.save()
         # Do not prematurely expire the current membership when renewing ahead of time.
         if self.end_date < today:
             self.status = 'expired'

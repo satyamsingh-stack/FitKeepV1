@@ -9,7 +9,10 @@ from django.utils import timezone
 from datetime import timedelta
 
 from attendance.models import Attendance, AttendanceQRCode
-from attendance.services import check_in_member, generate_qr_code, get_active_qr, get_monthly_attendance, get_gym_local_date
+from attendance.services import (
+    check_in_member, default_check_out_input, generate_qr_code, get_active_qr,
+    get_monthly_attendance, get_gym_local_date, parse_gym_datetime,
+)
 from members.models import MemberProfile
 from gyms.services import can_manage_members, get_user_gym, get_user_role, get_member_by_phone
 from audit.models import AuditLog
@@ -53,12 +56,16 @@ def check_in(request):
         member = get_member_by_phone(gym, phone)
         if not member:
             return JsonResponse({'success': False, 'error': 'Member not found.'}, status=404)
+        check_out_at = parse_gym_datetime(request.POST.get('check_out_at'), gym)
+        if not check_out_at:
+            return JsonResponse({'success': False, 'error': 'Enter a valid end time.'}, status=400)
 
         # This endpoint is the staff front-desk flow; QR self-check-in uses the member portal endpoint.
         manual = True
         result = check_in_member(
             member=member,
             gym=gym,
+            check_out_at=check_out_at,
             source='manual' if manual else 'qr',
             verified=manual,
             recorded_by=request.user if manual else None,
@@ -82,7 +89,10 @@ def check_in(request):
         return redirect('login')
     if not can_manage_members(request.user, gym):
         return HttpResponseForbidden('You do not have permission to use front-desk check-in.')
-    return render(request, 'attendance/check_in.html', {'gym': gym})
+    return render(request, 'attendance/check_in.html', {
+        'gym': gym,
+        'default_check_out': default_check_out_input(gym),
+    })
 
 
 @login_required

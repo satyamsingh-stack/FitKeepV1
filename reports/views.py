@@ -7,7 +7,7 @@ from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from datetime import timedelta
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from zoneinfo import ZoneInfo
 
 from gyms.services import get_user_gym, get_user_role, can_manage_members
@@ -47,11 +47,14 @@ def dashboard_view(request):
         end_date__gte=today,
     ).values('member_id').distinct().count()
     gym_now = timezone.now().astimezone(ZoneInfo(gym.timezone)) if getattr(gym, 'timezone', None) else timezone.now()
-    occupancy_window_start = gym_now - timedelta(hours=12)
+    occupancy_window_start = gym_now - timedelta(hours=2)
     live_occupancy = Attendance.objects.filter(
         gym=gym,
         check_in_at__gte=occupancy_window_start,
         check_in_at__lte=gym_now,
+    ).filter(
+        Q(check_out_at__gt=gym_now)
+        | Q(check_out_at__isnull=True)
     ).count()
     today_attendance = Attendance.objects.filter(gym=gym, check_in_date=today).count()
     week_attendance = Attendance.objects.filter(gym=gym, check_in_date__gte=week_ago, check_in_date__lte=today).count()

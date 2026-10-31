@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'fitkeep-pwa-v2';
+const CACHE_NAME = 'fitkeep-pwa-v3';
 const APP_SHELL = [
     '/static/css/main.css',
     '/static/js/main.js',

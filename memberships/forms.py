@@ -86,6 +86,7 @@ class SubscriptionForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        member = cleaned.get('member')
         plan = cleaned.get('plan')
         total = cleaned.get('total_amount')
         discount = cleaned.get('discount_amount') or 0
@@ -98,6 +99,19 @@ class SubscriptionForm(forms.ModelForm):
         start_date, end_date = cleaned.get('start_date'), cleaned.get('end_date')
         if start_date and end_date and end_date < start_date:
             self.add_error('end_date', _('End date must be on or after the start date.'))
+        if member and start_date and end_date and end_date >= start_date:
+            from django.core.exceptions import ValidationError
+            from memberships.models import MemberSubscription
+            candidate = MemberSubscription(
+                member=member,
+                gym=member.gym,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            try:
+                candidate.clean()
+            except ValidationError as exc:
+                self.add_error('start_date', exc.message_dict.get('start_date', exc.messages))
         return cleaned
 
 
@@ -130,6 +144,13 @@ class SubscriptionEditForm(forms.ModelForm):
             self.add_error('end_date', _('End date must be on or after the start date.'))
         if total_amount is not None and discount_amount > total_amount:
             self.add_error('discount_amount', _('Discount cannot exceed the membership fee.'))
+        if start_date and end_date and end_date >= start_date:
+            try:
+                self.instance.start_date = start_date
+                self.instance.end_date = end_date
+                self.instance.clean()
+            except ValidationError as exc:
+                self.add_error('start_date', exc.message_dict.get('start_date', exc.messages))
         return cleaned
 
 

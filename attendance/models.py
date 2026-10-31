@@ -69,6 +69,7 @@ class Attendance(models.Model):
     gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name='attendance_records')
     member = models.ForeignKey(MemberProfile, on_delete=models.CASCADE, related_name='attendance_records')
     check_in_at = models.DateTimeField(default=timezone.now)
+    check_out_at = models.DateTimeField(null=True, blank=True)
     check_in_date = models.DateField(db_index=True)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='qr')
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_CHOICES, default='verified')
@@ -95,6 +96,20 @@ class Attendance(models.Model):
 
     def __str__(self):
         return f'{self.member.full_name} - {self.check_in_at}'
+
+    def _format_gym_time(self, value):
+        if not value:
+            return '—'
+        from attendance.services import get_gym_timezone
+        return timezone.localtime(value, get_gym_timezone(self.gym)).strftime('%H:%M')
+
+    @property
+    def check_in_time_local(self):
+        return self._format_gym_time(self.check_in_at)
+
+    @property
+    def check_out_time_local(self):
+        return self._format_gym_time(self.check_out_at)
 
     def save(self, *args, **kwargs):
         if not self.check_in_date:

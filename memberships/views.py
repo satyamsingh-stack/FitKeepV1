@@ -3,6 +3,7 @@ Membership views: plans, subscriptions, renewals.
 """
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.http import HttpResponseForbidden
@@ -176,25 +177,34 @@ def subscription_add(request):
             from attendance.services import get_gym_local_date
             today = get_gym_local_date(gym)
             status = 'pending' if start_date > today else ('expired' if end_date < today else 'active')
-            subscription = MemberSubscription.objects.create(
-                member=member,
-                plan=plan,
-                gym=gym,
-                start_date=start_date,
-                end_date=end_date,
-                total_amount=total_amount,
-                discount_amount=discount,
-                status=status,
-            )
-
-            AuditLog.log_action(
-                actor=request.user,
-                action='create',
-                gym=gym,
-                target=subscription,
-            )
-            messages.success(request, 'Subscription created successfully.')
-            return redirect('subscription_list')
+            try:
+                with transaction.atomic():
+                    member = MemberProfile.objects.select_for_update().get(pk=member.pk, gym=gym)
+                    subscription = MemberSubscription(
+                        member=member,
+                        plan=plan,
+                        gym=gym,
+                        start_date=start_date,
+                        end_date=end_date,
+                        total_amount=total_amount,
+                        discount_amount=discount,
+                        status=status,
+                    )
+                    subscription.full_clean()
+                    subscription.save()
+            except ValidationError as exc:
+                form.add_error('start_date', exc)
+            except IntegrityError:
+                form.add_error(None, 'Another membership already exists for this member and date range.')
+            else:
+                AuditLog.log_action(
+                    actor=request.user,
+                    action='create',
+                    gym=gym,
+                    target=subscription,
+                )
+                messages.success(request, 'Subscription created successfully.')
+                return redirect('subscription_list')
     else:
         initial = {}
         member_pk = request.GET.get('member', '')
@@ -329,6 +339,8 @@ def subscription_renew(request, subscription_id):
                 form.add_error(None, 'This renewal has already been created for these dates.')
             except ValueError as exc:
                 form.add_error(None, str(exc))
+            except ValidationError as exc:
+                form.add_error(None, exc)
             else:
                 AuditLog.log_action(
                     actor=request.user, action='update', gym=gym, target=subscription,

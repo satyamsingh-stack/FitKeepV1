@@ -31,7 +31,7 @@ def member_list(request):
     from memberships.services import sync_subscription_statuses
     from payments.services import get_outstanding_payments
     from datetime import timedelta
-    from attendance.services import get_gym_local_date
+    from attendance.services import default_check_out_input, get_gym_local_date
 
     sync_subscription_statuses(gym=gym)
     today = get_gym_local_date(gym)
@@ -83,6 +83,7 @@ def member_list(request):
         'search': search,
         'status_filter': status_filter,
         'membership_filter': membership_filter,
+        'default_check_out': default_check_out_input(gym),
         'status_choices': MemberProfile.STATUS_CHOICES,
         'user_role': get_user_role(request.user, gym),
     }
@@ -203,6 +204,7 @@ def member_detail(request, member_id):
     )
     from attendance.services import get_gym_local_date
     checked_in_today = Attendance.objects.filter(member=member, check_in_date=get_gym_local_date(gym)).exists()
+    from attendance.services import default_check_out_input
 
     context = {
         'gym': gym,
@@ -210,6 +212,7 @@ def member_detail(request, member_id):
         'latest_subscription': latest_subscription,
         'total_due': total_due,
         'checked_in_today': checked_in_today,
+        'default_check_out': default_check_out_input(gym),
         'attendance_records': attendance_records,
         'subscriptions': subscriptions,
         'payments': payments,
@@ -270,9 +273,14 @@ def member_check_in(request, member_id):
         return HttpResponseForbidden('You do not have permission to record attendance.')
 
     member = get_object_or_404(MemberProfile, gym=gym, member_id=member_id)
-    from attendance.services import check_in_member
+    from attendance.services import check_in_member, default_check_out_input, parse_gym_datetime
+    check_out_value = request.POST.get('check_out_at') or default_check_out_input(gym)
+    check_out_at = parse_gym_datetime(check_out_value, gym)
+    if not check_out_at:
+        messages.error(request, 'Enter a valid end time later than now.')
+        return redirect('member_detail', member_id=member_id)
     result = check_in_member(
-        member=member, gym=gym, source='manual', verified=True,
+        member=member, gym=gym, check_out_at=check_out_at, source='manual', verified=True,
         recorded_by=request.user, ip_address=request.META.get('REMOTE_ADDR'),
     )
     if result['success']:

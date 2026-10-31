@@ -18,7 +18,7 @@ def create_subscription(member, plan, start_date, end_date, discount_amount=Deci
     if discount_amount < 0 or discount_amount > plan.price:
         raise ValueError('Discount must be between zero and the plan price.')
     total_amount = plan.price
-    subscription = MemberSubscription.objects.create(
+    subscription = MemberSubscription(
         member=member,
         plan=plan,
         gym=member.gym,
@@ -29,6 +29,8 @@ def create_subscription(member, plan, start_date, end_date, discount_amount=Deci
         notes=notes,
         status='active',
     )
+    subscription.full_clean()
+    subscription.save()
     return subscription
 
 
