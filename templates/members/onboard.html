@@ -250,6 +250,58 @@
     });
   }
 
+  function setupPhoneInput(input) {
+    if (!input) return;
+    function ensurePrefix() {
+      const v = input.value.trim();
+      if (!v || v === '+91') {
+        input.value = '+91 ';
+      }
+    }
+    ensurePrefix();
+
+    input.addEventListener('focus', function() {
+      if (!this.value.trim() || this.value.trim() === '+91') {
+        this.value = '+91 ';
+      }
+      if (this.value.startsWith('+91')) {
+        const len = this.value.length;
+        setTimeout(() => this.setSelectionRange(len, len), 10);
+      }
+    });
+
+    input.addEventListener('click', function() {
+      if (this.value === '+91 ') {
+        this.setSelectionRange(4, 4);
+      }
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Backspace' && this.value === '+91 ') {
+        e.preventDefault();
+      }
+    });
+
+    input.addEventListener('input', function() {
+      let v = this.value;
+      let digits = v.replace(/\D/g, '');
+      if (digits.startsWith('91')) {
+        digits = digits.slice(2);
+      } else if (digits.startsWith('0')) {
+        digits = digits.slice(1);
+      }
+
+      if (digits.length > 0) {
+        this.value = '+91 ' + digits.slice(0, 10);
+      } else {
+        this.value = '+91 ';
+      }
+    });
+  }
+
+  setupPhoneInput(document.getElementById('id_phone'));
+  setupPhoneInput(document.getElementById('id_emergency_contact'));
+
   // First load: keep anything the server re-rendered (after an error); otherwise apply the preselected plan.
   if (selectedPlan() && !f.fee.value) applyPlan();
   summary();

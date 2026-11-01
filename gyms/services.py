@@ -21,15 +21,19 @@ def get_user_gym(user):
     if not user.is_authenticated:
         raise GymAccessError('User is not authenticated')
 
-    if user.is_super_admin:
-        return None  # Super admin can access any gym
-
     membership = user.gym_memberships.filter(is_primary=True, status='active').first()
     if not membership:
         membership = user.gym_memberships.filter(status='active').first()
-    if not membership:
-        raise GymAccessError('User has no active gym membership')
-    return membership.gym
+    if membership:
+        return membership.gym
+
+    if user.is_super_admin:
+        first_gym = Gym.objects.first()
+        if first_gym:
+            return first_gym
+        return None
+
+    raise GymAccessError('User has no active gym membership')
 
 
 def get_user_role(user, gym=None):
