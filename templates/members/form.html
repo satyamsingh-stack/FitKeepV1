@@ -38,12 +38,14 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Emergency Contact</label>
+                            <label class="form-label">Emergency Contact Phone <span class="text-danger">*</span></label>
                             {{ form.emergency_contact }}
+                            {% for e in form.emergency_contact.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Emergency Contact Name</label>
+                            <label class="form-label">Emergency Contact Name <span class="text-danger">*</span></label>
                             {{ form.emergency_contact_name }}
+                            {% for e in form.emergency_contact_name.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Address</label>

@@ -27,9 +27,32 @@ class MemberForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['emergency_contact'].required = True
+        self.fields['emergency_contact_name'].required = True
+        self.fields['emergency_contact'].label = _('Emergency Contact Phone')
+        self.fields['emergency_contact_name'].label = _('Emergency Contact Name')
+        self.fields['emergency_contact_name'].widget.attrs.update({
+            'placeholder': 'e.g. Ramesh Sharma (Parent / Spouse / Friend)',
+        })
+        self.fields['emergency_contact'].widget.attrs.update({
+            'placeholder': '10-digit emergency phone number',
+            'inputmode': 'tel',
+        })
         for field_name, field in self.fields.items():
             if not field.required and not isinstance(field, forms.FileField):
                 field.required = False
+
+    def clean_emergency_contact(self):
+        contact = (self.cleaned_data.get('emergency_contact') or '').strip()
+        if not contact:
+            raise forms.ValidationError(_('Emergency contact phone is required.'))
+        return contact
+
+    def clean_emergency_contact_name(self):
+        name = (self.cleaned_data.get('emergency_contact_name') or '').strip()
+        if not name:
+            raise forms.ValidationError(_('Emergency contact name is required.'))
+        return name
 
 
 class MemberOnboardingForm(forms.ModelForm):
@@ -84,14 +107,37 @@ class MemberOnboardingForm(forms.ModelForm):
 
         self.fields['phone'].required = True
         self.fields['phone'].help_text = _('Used for member login and check-in.')
+        self.fields['emergency_contact'].required = True
+        self.fields['emergency_contact_name'].required = True
+        self.fields['emergency_contact'].label = _('Emergency Contact Phone')
+        self.fields['emergency_contact_name'].label = _('Emergency Contact Name')
         self.fields['full_name'].widget.attrs.update({'autofocus': True, 'placeholder': 'e.g. Priya Sharma'})
         self.fields['phone'].widget.attrs.update({'placeholder': '10-digit mobile number', 'inputmode': 'tel'})
+        self.fields['emergency_contact_name'].widget.attrs.update({
+            'placeholder': 'e.g. Ramesh Sharma (Parent / Spouse / Friend)',
+        })
+        self.fields['emergency_contact'].widget.attrs.update({
+            'placeholder': '10-digit emergency phone number',
+            'inputmode': 'tel',
+        })
 
         for name, field in self.fields.items():
             if name == 'plan':
                 continue
             css = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
             field.widget.attrs['class'] = css
+
+    def clean_emergency_contact(self):
+        contact = (self.cleaned_data.get('emergency_contact') or '').strip()
+        if not contact:
+            raise forms.ValidationError(_('Emergency contact phone is required.'))
+        return contact
+
+    def clean_emergency_contact_name(self):
+        name = (self.cleaned_data.get('emergency_contact_name') or '').strip()
+        if not name:
+            raise forms.ValidationError(_('Emergency contact name is required.'))
+        return name
 
     def clean_phone(self):
         phone = (self.cleaned_data.get('phone') or '').strip()

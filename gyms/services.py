@@ -114,11 +114,31 @@ def require_staff_access(view_func):
 
 
 def get_member_by_phone(gym, phone):
-    """Look up a member by phone number within a gym."""
+    """Look up a member by phone number or member ID within a gym."""
     if not phone:
         return None
     from members.models import MemberProfile
-    return MemberProfile.objects.filter(gym=gym, phone=phone).first()
+    from django.db.models import Q
+    clean_val = phone.strip()
+
+    # 1. Exact phone, member_id, or email match
+    member = MemberProfile.objects.filter(gym=gym).filter(
+        Q(phone=clean_val) | Q(member_id__iexact=clean_val) | Q(email__iexact=clean_val)
+    ).first()
+    if member:
+        return member
+
+    # 2. Flexible phone matching (handles leading 0, spaces, dashes, or country codes)
+    digits = ''.join(filter(str.isdigit, clean_val))
+    if digits:
+        last10 = digits[-10:] if len(digits) >= 10 else digits
+        member = MemberProfile.objects.filter(gym=gym).filter(
+            Q(phone__endswith=last10) | Q(phone=digits)
+        ).first()
+        if member:
+            return member
+
+    return None
 
 
 def get_member_by_id(gym, member_id):
