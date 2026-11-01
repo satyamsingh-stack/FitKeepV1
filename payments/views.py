@@ -107,25 +107,6 @@ def payment_add(request):
 
 
 @login_required
-def outstanding_payments(request):
-    """List members with outstanding payments."""
-    try:
-        gym = get_user_gym(request.user)
-    except Exception:
-        return redirect('login')
-
-    if not can_manage_members(request.user, gym):
-        return HttpResponseForbidden('You do not have permission to view outstanding payments.')
-    outstanding = get_outstanding_payments(gym)
-    context = {
-        'gym': gym,
-        'outstanding': outstanding,
-        'user_role': get_user_role(request.user, gym),
-    }
-    return render(request, 'payments/outstanding.html', context)
-
-
-@login_required
 def membership_fees(request):
     """Membership fee overview."""
     try:

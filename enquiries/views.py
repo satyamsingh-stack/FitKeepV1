@@ -54,7 +54,7 @@ def enquiry_list(request):
         form = EnquiryForm(instance=editing, gym=gym)
 
     enquiries = list(
-        Enquiry.objects.filter(gym=gym).select_related('interested_plan').order_by('follow_up_date', '-created_at')
+        Enquiry.objects.filter(gym=gym).select_related('interested_plan').order_by('-created_at')
     )
     for enquiry in enquiries:
         whatsapp_number = enquiry.whatsapp_number or enquiry.phone

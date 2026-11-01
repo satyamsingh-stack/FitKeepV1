@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateformat import format as format_date
 from datetime import timedelta
 
 from gyms.models import Gym
@@ -627,6 +628,32 @@ class EnquiryTests(TestCase):
         self.assertNotContains(response, '<th>Follow-up</th>')
         self.assertNotContains(response, '<th>Status</th>')
 
+    def test_enquiry_log_displays_and_sorts_by_enquiry_date(self):
+        older_enquiry = Enquiry.objects.create(
+            gym=self.gym,
+            name='Older enquiry',
+            phone='1111111111',
+            follow_up_date=timezone.localdate() + timedelta(days=1),
+        )
+        newer_enquiry = Enquiry.objects.create(
+            gym=self.gym,
+            name='Newer enquiry',
+            phone='2222222222',
+        )
+        older_date = timezone.now() - timedelta(days=2)
+        newer_date = timezone.now() - timedelta(days=1)
+        Enquiry.objects.filter(pk=older_enquiry.pk).update(created_at=older_date)
+        Enquiry.objects.filter(pk=newer_enquiry.pk).update(created_at=newer_date)
+
+        response = self.client.get(reverse('enquiry_list'))
+
+        self.assertEqual(
+            list(response.context['enquiries']),
+            [newer_enquiry, older_enquiry],
+        )
+        self.assertContains(response, '<th>Enquiry date</th>')
+        self.assertContains(response, format_date(newer_date, 'M j, Y'))
+
     def test_enquiry_page_offers_prefilled_welcome_whatsapp_only(self):
         Enquiry.objects.create(
             gym=self.gym,
@@ -982,6 +1009,11 @@ class AdminWorkflowTests(TestCase):
             response,
             f'class="navbar-brand brand-mark" href="{reverse("dashboard")}"',
         )
+        self.assertContains(response, 'class="nav-link notification-link position-relative"')
+        self.assertNotContains(
+            response,
+            f'class="dropdown-item" href="{reverse("notification_list")}"',
+        )
 
     # --- renew + pay ---------------------------------------------------------------
     def test_renewal_with_payment_in_one_step(self):
@@ -1316,10 +1348,14 @@ class AdminWorkflowTests(TestCase):
             reverse('subscription_renew', args=[sub.id]),
             reverse('plan_list'), reverse('plan_add'), reverse('plan_edit', args=[self.plan.id]),
             reverse('payment_add') + f'?member={self.member.member_id}&subscription_id={sub.id}',
-            reverse('outstanding_payments'),
         ]
         for url in urls:
             self.assertEqual(self.client.get(url).status_code, 200, url)
+
+    def test_outstanding_payments_page_is_removed(self):
+        response = self.client.get('/gym/payments/outstanding/')
+
+        self.assertEqual(response.status_code, 404)
 
     def test_dashboard_omits_renewals_and_fees_panels(self):
         self._sub(self.today - timedelta(days=20), self.today + timedelta(days=2), 'active')

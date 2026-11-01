@@ -23,9 +23,10 @@
     </div>
     <div class="col-xl-8">
         <div class="card"><div class="card-header d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Enquiry log</h2><span class="badge bg-primary">{{ enquiries|length }}</span></div>
-            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Prospect</th><th>Interest / comments</th><th>Actions</th></tr></thead>
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Enquiry date</th><th>Prospect</th><th>Interest / comments</th><th>Actions</th></tr></thead>
                 <tbody>{% for enquiry in enquiries %}
                     <tr>
+                        <td>{{ enquiry.created_at|date:"M j, Y" }}</td>
                         <td><strong>{{ enquiry.name }}</strong><span class="d-block small">{{ enquiry.phone }}</span>{% if enquiry.whatsapp_number and enquiry.whatsapp_number != enquiry.phone %}<span class="d-block small text-muted">WhatsApp: {{ enquiry.whatsapp_number }}</span>{% endif %}{% if enquiry.email %}<span class="d-block small text-muted">{{ enquiry.email }}</span>{% endif %}</td>
                         <td>{% if enquiry.interested_plan %}<strong>{{ enquiry.interested_plan.name }}</strong><br>{% endif %}{{ enquiry.details|default:'—'|linebreaksbr }}{% if enquiry.comments %}<div class="small text-muted mt-2"><strong>Comments:</strong> {{ enquiry.comments|linebreaksbr }}</div>{% endif %}</td>
                         <td><div class="d-flex flex-column gap-1">
@@ -33,7 +34,7 @@
                             {% if enquiry.welcome_whatsapp_url %}<a class="btn btn-sm btn-success" href="{{ enquiry.welcome_whatsapp_url }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1"></i>WhatsApp welcome</a>{% else %}<span class="small text-muted">Add a WhatsApp number to follow up</span>{% endif %}
                         </div></td>
                     </tr>
-                {% empty %}<tr><td colspan="3" class="text-center py-5 text-muted">No enquiries yet. Use the form to add your first prospect.</td></tr>{% endfor %}</tbody>
+                {% empty %}<tr><td colspan="4" class="text-center py-5 text-muted">No enquiries yet. Use the form to add your first prospect.</td></tr>{% endfor %}</tbody>
             </table></div>
         </div>
     </div>
