@@ -36,6 +36,7 @@ def attendance_home(request):
         'gym': gym,
         'today_count': today_count,
         'qr_code': qr,
+        'default_check_out': default_check_out_input(gym),
         'user_role': get_user_role(request.user, gym),
     }
     return render(request, 'attendance/home.html', context)
@@ -55,8 +56,9 @@ def check_in(request):
         phone = request.POST.get('phone', '').strip()
         member = get_member_by_phone(gym, phone)
         if not member:
-            return JsonResponse({'success': False, 'error': 'Member not found.'}, status=404)
-        check_out_at = parse_gym_datetime(request.POST.get('check_out_at'), gym)
+            return JsonResponse({'success': False, 'error': f'Member not found for "{phone}". Please check the phone number or Member ID.'}, status=404)
+        check_out_raw = request.POST.get('check_out_at') or default_check_out_input(gym)
+        check_out_at = parse_gym_datetime(check_out_raw, gym)
         if not check_out_at:
             return JsonResponse({'success': False, 'error': 'Enter a valid end time.'}, status=400)
 

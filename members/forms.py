@@ -9,6 +9,25 @@ from django.utils.translation import gettext_lazy as _
 from members.models import MemberProfile
 
 
+def normalize_phone_number(val):
+    """Normalize Indian phone numbers to standard format (+91XXXXXXXXXX)."""
+    if not val:
+        return ''
+    clean = str(val).strip()
+    digits = ''.join(filter(str.isdigit, clean))
+    if len(digits) == 10:
+        return f'+91{digits}'
+    elif len(digits) == 11 and digits.startswith('0'):
+        return f'+91{digits[1:]}'
+    elif len(digits) == 12 and digits.startswith('91'):
+        return f'+{digits}'
+    elif clean.startswith('+'):
+        return clean.replace(' ', '')
+    elif digits:
+        return f'+91{digits}'
+    return clean
+
+
 class MemberForm(forms.ModelForm):
     """Form for creating and editing member profiles."""
 
@@ -27,9 +46,51 @@ class MemberForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.instance.pk:
+            self.fields['phone'].initial = '+91 '
+            self.fields['emergency_contact'].initial = '+91 '
+
+        self.fields['emergency_contact'].required = True
+        self.fields['emergency_contact_name'].required = True
+        self.fields['emergency_contact'].label = _('Emergency Contact Phone')
+        self.fields['emergency_contact_name'].label = _('Emergency Contact Name')
+        self.fields['phone'].widget.attrs.update({'placeholder': '+91 9876543210', 'inputmode': 'tel'})
+        self.fields['emergency_contact_name'].widget.attrs.update({
+            'placeholder': 'e.g. Ramesh Sharma (Parent / Spouse / Friend)',
+        })
+        self.fields['emergency_contact'].widget.attrs.update({
+            'placeholder': '+91 9876543210',
+            'inputmode': 'tel',
+        })
         for field_name, field in self.fields.items():
             if not field.required and not isinstance(field, forms.FileField):
                 field.required = False
+
+    def clean_phone(self):
+        phone = (self.cleaned_data.get('phone') or '').strip()
+        digits = ''.join(filter(str.isdigit, phone))
+        subscriber_digits = digits[2:] if digits.startswith('91') else (digits[1:] if digits.startswith('0') else digits)
+        if not subscriber_digits:
+            raise forms.ValidationError(_('Enter a valid 10-digit phone number.'))
+        if len(subscriber_digits) < 10:
+            raise forms.ValidationError(_('Phone number must have at least 10 digits.'))
+        return normalize_phone_number(phone)
+
+    def clean_emergency_contact(self):
+        contact = (self.cleaned_data.get('emergency_contact') or '').strip()
+        digits = ''.join(filter(str.isdigit, contact))
+        subscriber_digits = digits[2:] if digits.startswith('91') else (digits[1:] if digits.startswith('0') else digits)
+        if not subscriber_digits:
+            raise forms.ValidationError(_('Emergency contact phone is required.'))
+        if len(subscriber_digits) < 10:
+            raise forms.ValidationError(_('Emergency contact phone must have at least 10 digits.'))
+        return normalize_phone_number(contact)
+
+    def clean_emergency_contact_name(self):
+        name = (self.cleaned_data.get('emergency_contact_name') or '').strip()
+        if not name:
+            raise forms.ValidationError(_('Emergency contact name is required.'))
+        return name
 
 
 class MemberOnboardingForm(forms.ModelForm):
@@ -77,6 +138,9 @@ class MemberOnboardingForm(forms.ModelForm):
         )
         self.fields['payment_method'].choices = Payment.METHOD_CHOICES
         self.fields['payment_method'].initial = 'cash'
+        if not self.is_bound and not self.instance.pk:
+            self.fields['phone'].initial = '+91 '
+            self.fields['emergency_contact'].initial = '+91 '
         if gym and not self.is_bound:
             self.fields['start_date'].initial = get_gym_local_date(gym)
             self.fields['discount_amount'].initial = 0
@@ -84,8 +148,19 @@ class MemberOnboardingForm(forms.ModelForm):
 
         self.fields['phone'].required = True
         self.fields['phone'].help_text = _('Used for member login and check-in.')
+        self.fields['emergency_contact'].required = True
+        self.fields['emergency_contact_name'].required = True
+        self.fields['emergency_contact'].label = _('Emergency Contact Phone')
+        self.fields['emergency_contact_name'].label = _('Emergency Contact Name')
         self.fields['full_name'].widget.attrs.update({'autofocus': True, 'placeholder': 'e.g. Priya Sharma'})
-        self.fields['phone'].widget.attrs.update({'placeholder': '10-digit mobile number', 'inputmode': 'tel'})
+        self.fields['phone'].widget.attrs.update({'placeholder': '+91 9876543210', 'inputmode': 'tel'})
+        self.fields['emergency_contact_name'].widget.attrs.update({
+            'placeholder': 'e.g. Ramesh Sharma (Parent / Spouse / Friend)',
+        })
+        self.fields['emergency_contact'].widget.attrs.update({
+            'placeholder': '+91 9876543210',
+            'inputmode': 'tel',
+        })
 
         for name, field in self.fields.items():
             if name == 'plan':
@@ -93,10 +168,38 @@ class MemberOnboardingForm(forms.ModelForm):
             css = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
             field.widget.attrs['class'] = css
 
+    def clean_emergency_contact(self):
+        contact = (self.cleaned_data.get('emergency_contact') or '').strip()
+        digits = ''.join(filter(str.isdigit, contact))
+        subscriber_digits = digits[2:] if digits.startswith('91') else (digits[1:] if digits.startswith('0') else digits)
+        if not subscriber_digits:
+            raise forms.ValidationError(_('Emergency contact phone is required.'))
+        if len(subscriber_digits) < 10:
+            raise forms.ValidationError(_('Emergency contact phone must have at least 10 digits.'))
+        return normalize_phone_number(contact)
+
+    def clean_emergency_contact_name(self):
+        name = (self.cleaned_data.get('emergency_contact_name') or '').strip()
+        if not name:
+            raise forms.ValidationError(_('Emergency contact name is required.'))
+        return name
+
     def clean_phone(self):
         phone = (self.cleaned_data.get('phone') or '').strip()
-        if self.gym and phone and MemberProfile.objects.filter(gym=self.gym, phone=phone).exists():
-            raise forms.ValidationError(_('A member with this phone number already exists in your gym.'))
+        digits = ''.join(filter(str.isdigit, phone))
+        subscriber_digits = digits[2:] if digits.startswith('91') else (digits[1:] if digits.startswith('0') else digits)
+        if not subscriber_digits:
+            raise forms.ValidationError(_('Enter a valid 10-digit phone number.'))
+        if len(subscriber_digits) < 10:
+            raise forms.ValidationError(_('Phone number must have at least 10 digits.'))
+        phone = normalize_phone_number(phone)
+        last10 = subscriber_digits[-10:]
+        if self.gym:
+            from django.db.models import Q
+            if MemberProfile.objects.filter(gym=self.gym).filter(
+                Q(phone=phone) | Q(phone=last10) | Q(phone=f'0{last10}') | Q(phone=f'+91{last10}')
+            ).exists():
+                raise forms.ValidationError(_('A member with this phone number already exists in your gym.'))
         return phone
 
     def clean_email(self):
