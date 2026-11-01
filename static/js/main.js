@@ -65,10 +65,13 @@
             }
         }));
 
-        // Auto-add and populate +91 for attendance and member phone inputs
-        const phoneInputs = document.querySelectorAll('input[type="tel"], input[name="phone"], input[name="emergency_contact"], input#phone, input#id_phone, input#id_emergency_contact');
+        // Auto-add and populate +91 for member phone and emergency contact inputs (excluding attendance mark)
+        const phoneInputs = document.querySelectorAll('input#id_phone, input#id_emergency_contact, form:not(#checkinForm) input[name="phone"], form:not(#checkinForm) input[name="emergency_contact"]');
         phoneInputs.forEach(input => {
-            const isAttendance = input.id === 'phone' || (input.form && (input.form.id === 'checkinForm' || input.form.action.includes('check-in')));
+            const isAttendance = input.id === 'phone' || (input.form && (input.form.id === 'checkinForm' || (input.form.action && input.form.action.includes('check-in'))));
+            if (isAttendance) {
+                return; // Do not apply +91 prefix during attendance mark
+            }
             
             function ensurePrefix() {
                 const v = input.value.trim();
@@ -102,9 +105,6 @@
 
             input.addEventListener('input', function () {
                 let v = this.value;
-                if (isAttendance && /^[a-zA-Z]/.test(v.trim())) {
-                    return; // allow entering Member ID
-                }
                 let digits = v.replace(/\D/g, '');
                 if (digits.startsWith('91')) {
                     digits = digits.slice(2);

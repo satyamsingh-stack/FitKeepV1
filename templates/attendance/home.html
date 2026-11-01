@@ -67,8 +67,8 @@
                     <div class="col-md-8">
                         <label class="form-label fw-semibold" for="phone">Member phone number or Member ID</label>
                         <div class="input-group">
-                            <!-- <span class="input-group-text"><i class="bi bi-telephone"></i></span> -->
-                            <input id="phone" type="text" name="phone" class="form-control" placeholder="+91 9876543210 or Member ID" value="+91 " required autocomplete="tel" inputmode="tel">
+                            <!-- <span class="input-group-text"><i class="bi bi-person-badge"></i></span> -->
+                            <input id="phone" type="text" name="phone" class="form-control" placeholder="Enter phone number or Member ID" required autocomplete="off">
                         </div>
                         <div class="form-text">Type 10-digit mobile number or Member ID (e.g. MBR...)</div>
                     </div>
@@ -113,62 +113,6 @@
     const result = document.getElementById('checkinResult');
     const btn = form.querySelector('button[type=submit]');
 
-    function ensurePrefix() {
-        if (!phoneInput) return;
-        const v = phoneInput.value.trim();
-        if (!v || v === '+91') {
-            phoneInput.value = '+91 ';
-        }
-    }
-
-    if (phoneInput) {
-        ensurePrefix();
-
-        phoneInput.addEventListener('focus', function() {
-            if (!this.value.trim() || this.value.trim() === '+91') {
-                this.value = '+91 ';
-            }
-            if (this.value.startsWith('+91')) {
-                const len = this.value.length;
-                setTimeout(() => this.setSelectionRange(len, len), 10);
-            }
-        });
-
-        phoneInput.addEventListener('click', function() {
-            if (this.value === '+91 ') {
-                this.setSelectionRange(4, 4);
-            }
-        });
-
-        phoneInput.addEventListener('keydown', function(e) {
-            // If user has only '+91 ' and presses backspace, keep '+91 '
-            if (e.key === 'Backspace' && this.value === '+91 ') {
-                e.preventDefault();
-            }
-        });
-
-        phoneInput.addEventListener('input', function() {
-            let v = this.value;
-            // Allow Member ID (e.g. MBR...)
-            if (/^[a-zA-Z]/.test(v.trim())) {
-                return;
-            }
-
-            let digits = v.replace(/\D/g, '');
-            if (digits.startsWith('91')) {
-                digits = digits.slice(2);
-            } else if (digits.startsWith('0')) {
-                digits = digits.slice(1);
-            }
-
-            if (digits.length > 0) {
-                this.value = '+91 ' + digits.slice(0, 10);
-            } else if (v.startsWith('+') || v.trim() === '') {
-                this.value = '+91 ';
-            }
-        });
-    }
-
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
         btn.disabled = true;
@@ -186,9 +130,6 @@
             if (!r.ok || !data.success) throw new Error(data.error || 'Unable to record check-in');
             result.innerHTML = '<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-2"></i>' + data.message + '</div>';
             form.reset();
-            if (phoneInput) {
-                phoneInput.value = '+91 ';
-            }
             setTimeout(() => location.reload(), 900);
         } catch(err) {
             result.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-circle me-2"></i>' + err.message + '</div>';
