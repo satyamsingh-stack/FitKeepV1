@@ -70,8 +70,8 @@
                             <a href="https://wa.me/{{ member.phone }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success" title="WhatsApp member"><i class="bi bi-whatsapp"></i></a>
                         {% endif %}
                         <form method="post" action="{% url 'member_check_in' member.member_id %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-sm btn-outline-success" title="Mark present today"><i class="bi bi-person-check"></i></button></form>
-                        {% if member.current_sub %}<a href="{% url 'subscription_renew' member.current_sub.id %}" class="btn btn-sm btn-outline-success" title="Renew membership"><i class="bi bi-arrow-repeat"></i></a>{% endif %}
-                        <a href="{% url 'payment_add' %}?member={{ member.member_id }}" class="btn btn-sm btn-outline-success" title="Record payment"><i class="bi bi-cash"></i></a>
+                        <!-- {% if member.current_sub %}<a href="{% url 'subscription_renew' member.current_sub.id %}" class="btn btn-sm btn-outline-success" title="Renew membership"><i class="bi bi-arrow-repeat"></i></a>{% endif %} -->
+                        <!-- <a href="{% url 'payment_add' %}?member={{ member.member_id }}" class="btn btn-sm btn-outline-success" title="Record payment"><i class="bi bi-cash"></i></a> -->
                         <a href="{% url 'member_detail' member.member_id %}" class="btn btn-sm btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
                         <a href="{% url 'member_edit' member.member_id %}" class="btn btn-sm btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
                     </td>
