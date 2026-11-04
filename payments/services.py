@@ -21,6 +21,18 @@ def get_payment_receipt_filename(payment):
     return f'{member_name}_{gym_name}.pdf'
 
 
+def payment_receipt_available(payment):
+    """Only make a subscription receipt available after its balance is settled."""
+    if payment.status != 'completed':
+        return False
+    if payment.subscription:
+        return payment.subscription.outstanding_balance == 0
+    return not any(
+        subscription.outstanding_balance > 0
+        for subscription in payment.member.subscriptions.filter(status__in=['active', 'yet_to_start'])
+    )
+
+
 def record_payment(member, amount, method='cash', subscription=None, notes='', reference_number='', recorded_by=None, payment_date=None):
     """
     Record a payment for a member.

@@ -201,7 +201,7 @@
                 {{ payment.get_method_display }}
                 {% if payment.status != 'completed' %} · {{ payment.get_status_display }}{% endif %}
               </div>
-              {% if payment.status == 'completed' %}
+              {% if payment.receipt_available %}
               <div class="d-grid gap-2">
                 <a class="btn btn-outline-primary" href="{% url 'payment_receipt_pdf' payment.id %}" download>
                   <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
@@ -214,6 +214,11 @@
                 <span class="small text-muted">Add a member phone number to open WhatsApp.</span>
                 {% endif %}
               </div>
+              {% elif payment.status == 'completed' %}
+              <span class="small text-warning">
+                Receipt available after the membership balance is paid in full.
+                {% if payment.subscription %}Outstanding: ₹{{ payment.subscription.outstanding_balance }}{% endif %}
+              </span>
               {% endif %}
             </div>
             {% empty %}
@@ -238,7 +243,7 @@
                 <td>₹{{ payment.amount }}</td>
                 <td>{{ payment.get_method_display }}</td>
                 <td class="text-nowrap">
-                  {% if payment.status == 'completed' %}
+                  {% if payment.receipt_available %}
                   <a
                     class="btn btn-sm btn-outline-primary"
                     href="{% url 'payment_receipt_pdf' payment.id %}"
@@ -256,6 +261,8 @@
                     ><i class="bi bi-whatsapp"></i> WhatsApp</a
                   >
                   {% endif %}
+                  {% elif payment.status == 'completed' %}
+                  <span class="text-warning small">Receipt unavailable while balance is due</span>
                   {% else %}<span class="text-muted">{{ payment.get_status_display }}</span>{% endif %}
                 </td>
               </tr>
