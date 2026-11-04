@@ -18,7 +18,8 @@ from members.models import MemberProfile
 from payments.models import Payment, FeeReminder
 from memberships.models import MemberSubscription
 from payments.services import (
-    get_outstanding_payments, get_payment_receipt_filename, get_payment_summary, record_payment,
+    get_outstanding_payments, get_payment_receipt_filename, get_payment_summary,
+    payment_receipt_available, record_payment,
 )
 from gyms.services import can_manage_members, get_user_gym, get_user_role
 from audit.models import AuditLog
@@ -66,6 +67,9 @@ def payment_receipt_pdf(request, payment_id):
         member__gym=gym,
         status='completed',
     )
+    if not payment_receipt_available(payment):
+        return HttpResponseForbidden('A receipt is available after the membership balance has been paid in full.')
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     page_width, page_height = A4
