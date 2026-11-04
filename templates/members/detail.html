@@ -190,6 +190,40 @@
       <div class="card">
         <div class="card-header">Recent Payments</div>
         <div class="card-body">
+          <div class="d-md-none">
+            {% for payment in payments %}
+            <div class="border rounded-3 p-3 mb-3">
+              <div class="d-flex justify-content-between gap-3 mb-2">
+                <strong>₹{{ payment.amount }}</strong>
+                <span>{{ payment.payment_date|date:"M d, Y" }}</span>
+              </div>
+              <div class="small text-muted mb-3">
+                {{ payment.get_method_display }}
+                {% if payment.status != 'completed' %} · {{ payment.get_status_display }}{% endif %}
+              </div>
+              {% if payment.status == 'completed' %}
+              <div class="d-grid gap-2">
+                <a class="btn btn-outline-primary" href="{% url 'payment_receipt_pdf' payment.id %}" download>
+                  <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+                </a>
+                <button
+                  type="button"
+                  class="btn btn-success"
+                  data-payment-share
+                  data-receipt-url="{% url 'payment_receipt_pdf' payment.id %}"
+                  data-filename="receipt-{{ payment.id }}.pdf"
+                  data-share-text="{{ whatsapp_message }}"
+                  aria-label="Send receipt PDF for payment {{ payment.id }}"
+                ><i class="bi bi-whatsapp me-1"></i>Send PDF</button>
+              </div>
+              {% endif %}
+            </div>
+            {% empty %}
+            <p class="text-center text-muted mb-0">No payments</p>
+            {% endfor %}
+          </div>
+          <div class="d-none d-md-block">
+          <div class="table-responsive">
           <table class="table">
             <thead>
               <tr>
@@ -214,21 +248,17 @@
                     aria-label="Download receipt PDF for payment {{ payment.id }}"
                     ><i class="bi bi-file-earmark-pdf"></i> PDF</a
                   >
-                  {% if whatsapp_phone %}
-                  <a
+                  <button
+                    type="button"
                     class="btn btn-sm btn-outline-success"
-                    href="https://wa.me/{{ whatsapp_phone }}?text={{ whatsapp_message|urlencode }}"
-                    target="_blank"
-                    rel="noopener noreferrer"
                     data-payment-share
                     data-receipt-url="{% url 'payment_receipt_pdf' payment.id %}"
                     data-filename="receipt-{{ payment.id }}.pdf"
                     data-share-text="{{ whatsapp_message }}"
                     title="Choose WhatsApp in the device share sheet"
                     aria-label="Share receipt PDF for payment {{ payment.id }} using the device share sheet"
-                    ><i class="bi bi-whatsapp"></i> Share PDF</a
+                    ><i class="bi bi-whatsapp"></i> Send PDF</button
                   >
-                  {% endif %}
                   {% else %}<span class="text-muted">{{ payment.get_status_display }}</span>{% endif %}
                 </td>
               </tr>
@@ -239,6 +269,8 @@
               {% endfor %}
             </tbody>
           </table>
+          </div>
+          </div>
         </div>
       </div>
     </div>

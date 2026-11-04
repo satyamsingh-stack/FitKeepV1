@@ -560,16 +560,18 @@ class PaymentServiceTests(TestCase):
         payment = Payment.objects.get(member=self.member)
         self.assertEqual(get_gym_local_date(self.gym, payment.payment_date), payment_date)
 
-    def test_member_detail_offers_receipt_and_whatsapp_for_completed_payments(self):
+    def test_member_detail_offers_receipt_and_pdf_sharing_for_completed_payments(self):
         payment = record_payment(self.member, 125.50, subscription=self.subscription)
+        self.member.phone = ''
+        self.member.save(update_fields=['phone'])
         self.client.force_login(self.owner)
 
         response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse('payment_receipt_pdf', args=[payment.pk]))
-        self.assertContains(response, 'https://wa.me/1234567890?text=')
-        self.assertContains(response, 'data-payment-share')
+        self.assertContains(response, 'Send PDF', count=2)
+        self.assertContains(response, 'aria-label="Send receipt PDF', count=1)
 
     def test_completed_payment_receipt_is_a_gym_scoped_pdf(self):
         payment = record_payment(self.member, 125.50, subscription=self.subscription)

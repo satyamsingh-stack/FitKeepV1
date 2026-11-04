@@ -1,8 +1,6 @@
 """
 Member views: CRUD operations for gym members.
 """
-import re
-
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -230,7 +228,6 @@ def member_detail(request, member_id):
     context = {
         'gym': gym,
         'member': member,
-        'whatsapp_phone': re.sub(r'\D', '', member.phone or ''),
         'whatsapp_message': f'Hi {member.full_name}, here is your payment receipt from {gym.name}.',
         'latest_subscription': latest_subscription,
         'total_due': total_due,
