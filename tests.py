@@ -560,6 +560,45 @@ class PaymentServiceTests(TestCase):
         payment = Payment.objects.get(member=self.member)
         self.assertEqual(get_gym_local_date(self.gym, payment.payment_date), payment_date)
 
+    def test_member_detail_offers_receipt_and_whatsapp_for_completed_payments(self):
+        payment = record_payment(self.member, 125.50, subscription=self.subscription)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('payment_receipt_pdf', args=[payment.pk]))
+        self.assertContains(response, 'https://wa.me/1234567890?text=')
+        self.assertContains(response, 'data-payment-share')
+
+    def test_completed_payment_receipt_is_a_gym_scoped_pdf(self):
+        payment = record_payment(self.member, 125.50, subscription=self.subscription)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Disposition'], f'attachment; filename="receipt-{payment.pk}.pdf"')
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+        other_gym = Gym.objects.create(name='Other Gym', slug='other-gym', status='active')
+        other_member = MemberProfile.objects.create(gym=other_gym, full_name='Other Member')
+        other_payment = Payment.objects.create(member=other_member, amount=50)
+        self.assertEqual(
+            self.client.get(reverse('payment_receipt_pdf', args=[other_payment.pk])).status_code,
+            404,
+        )
+
+    def test_non_completed_payment_does_not_have_a_receipt(self):
+        payment = Payment.objects.create(member=self.member, amount=50, status='pending')
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
     def test_get_outstanding_payments(self):
         record_payment(self.member, 500, subscription=self.subscription)
         outstanding = get_outstanding_payments(self.gym)

@@ -196,6 +196,7 @@
                 <th>Date</th>
                 <th>Amount</th>
                 <th>Method</th>
+                <th>Receipt</th>
               </tr>
             </thead>
             <tbody>
@@ -203,11 +204,37 @@
               <tr>
                 <td>{{ payment.payment_date|date:"M d, Y" }}</td>
                 <td>₹{{ payment.amount }}</td>
-                <td>{{ payment.method }}</td>
+                <td>{{ payment.get_method_display }}</td>
+                <td class="text-nowrap">
+                  {% if payment.status == 'completed' %}
+                  <a
+                    class="btn btn-sm btn-outline-primary"
+                    href="{% url 'payment_receipt_pdf' payment.id %}"
+                    download
+                    aria-label="Download receipt PDF for payment {{ payment.id }}"
+                    ><i class="bi bi-file-earmark-pdf"></i> PDF</a
+                  >
+                  {% if whatsapp_phone %}
+                  <a
+                    class="btn btn-sm btn-outline-success"
+                    href="https://wa.me/{{ whatsapp_phone }}?text={{ whatsapp_message|urlencode }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-payment-share
+                    data-receipt-url="{% url 'payment_receipt_pdf' payment.id %}"
+                    data-filename="receipt-{{ payment.id }}.pdf"
+                    data-share-text="{{ whatsapp_message }}"
+                    title="Choose WhatsApp in the device share sheet"
+                    aria-label="Share receipt PDF for payment {{ payment.id }} using the device share sheet"
+                    ><i class="bi bi-whatsapp"></i> Share PDF</a
+                  >
+                  {% endif %}
+                  {% else %}<span class="text-muted">{{ payment.get_status_display }}</span>{% endif %}
+                </td>
               </tr>
               {% empty %}
               <tr>
-                <td colspan="3" class="text-center">No payments</td>
+                <td colspan="4" class="text-center">No payments</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -217,4 +244,59 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+  document.querySelectorAll('[data-payment-share]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      const downloadReceipt = () => {
+        const download = document.createElement('a');
+        download.href = button.dataset.receiptUrl;
+        download.download = button.dataset.filename;
+        download.click();
+      };
+      const showManualShareNotice = () => {
+        window.alert('This browser cannot share PDF files directly. The receipt has been downloaded; attach it to a WhatsApp message manually.');
+      };
+      if (typeof File === 'undefined' || !navigator.share || !navigator.canShare) {
+        downloadReceipt();
+        showManualShareNotice();
+        return;
+      }
+
+      const sampleFile = new File([], button.dataset.filename, { type: 'application/pdf' });
+      if (!navigator.canShare({ files: [sampleFile] })) {
+        downloadReceipt();
+        showManualShareNotice();
+        return;
+      }
+
+      let file;
+      try {
+        const response = await fetch(button.dataset.receiptUrl, { credentials: 'same-origin' });
+        if (!response.ok) {
+          throw new Error('The receipt PDF could not be downloaded.');
+        }
+        file = new File([await response.blob()], button.dataset.filename, { type: 'application/pdf' });
+      } catch (error) {
+        window.alert(error.message || 'The receipt PDF could not be downloaded for sharing.');
+        return;
+      }
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Payment receipt',
+          text: button.dataset.shareText,
+        });
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return;
+        }
+        downloadReceipt();
+        showManualShareNotice();
+      }
+    });
+  });
+</script>
 {% endblock %}
