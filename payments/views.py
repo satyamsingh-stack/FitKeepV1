@@ -17,7 +17,9 @@ from reportlab.pdfgen import canvas
 from members.models import MemberProfile
 from payments.models import Payment, FeeReminder
 from memberships.models import MemberSubscription
-from payments.services import get_outstanding_payments, get_payment_summary, record_payment
+from payments.services import (
+    get_outstanding_payments, get_payment_receipt_filename, get_payment_summary, record_payment,
+)
 from gyms.services import can_manage_members, get_user_gym, get_user_role
 from audit.models import AuditLog
 
@@ -59,7 +61,7 @@ def payment_receipt_pdf(request, payment_id):
         return HttpResponseForbidden('You do not have permission to view payment receipts.')
 
     payment = get_object_or_404(
-        Payment.objects.select_related('member', 'subscription__plan'),
+        Payment.objects.select_related('member__gym', 'subscription__plan'),
         pk=payment_id,
         member__gym=gym,
         status='completed',
@@ -122,7 +124,7 @@ def payment_receipt_pdf(request, payment_id):
     pdf.save()
 
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="receipt-{payment.pk}.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="{get_payment_receipt_filename(payment)}"'
     return response
 
 
