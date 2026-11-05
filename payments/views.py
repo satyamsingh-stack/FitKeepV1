@@ -1,18 +1,26 @@
 """
 Payments views: payment recording, outstanding tracking, fee reminders.
 """
+from io import BytesIO
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.core.exceptions import ValidationError
 from django import forms
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 from members.models import MemberProfile
 from payments.models import Payment, FeeReminder
 from memberships.models import MemberSubscription
-from payments.services import get_outstanding_payments, get_payment_summary, record_payment
+from payments.services import (
+    get_outstanding_payments, get_payment_receipt_filename, get_payment_summary,
+    payment_receipt_available, record_payment,
+)
 from gyms.services import can_manage_members, get_user_gym, get_user_role
 from audit.models import AuditLog
 
@@ -39,6 +47,89 @@ def payment_list(request):
         'user_role': get_user_role(request.user, gym),
     }
     return render(request, 'payments/list.html', context)
+
+
+@login_required
+@never_cache
+def payment_receipt_pdf(request, payment_id):
+    """Download a PDF receipt for a completed payment in the user's gym."""
+    try:
+        gym = get_user_gym(request.user)
+    except Exception:
+        return redirect('login')
+
+    if not can_manage_members(request.user, gym):
+        return HttpResponseForbidden('You do not have permission to view payment receipts.')
+
+    payment = get_object_or_404(
+        Payment.objects.select_related('member__gym', 'subscription__plan'),
+        pk=payment_id,
+        member__gym=gym,
+        status='completed',
+    )
+    if not payment_receipt_available(payment):
+        return HttpResponseForbidden('A receipt is available after the membership balance has been paid in full.')
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    page_width, page_height = A4
+    left = 48
+    y = page_height - 58
+
+    pdf.setTitle(f'Payment receipt {payment.pk}')
+    pdf.setFont('Helvetica-Bold', 18)
+    pdf.drawString(left, y, 'PAYMENT RECEIPT')
+    y -= 28
+    pdf.setFont('Helvetica-Bold', 12)
+    pdf.drawString(left, y, gym.name)
+    y -= 18
+    pdf.setFont('Helvetica', 10)
+    for line in (gym.address, gym.phone, gym.email):
+        if line:
+            pdf.drawString(left, y, line[:100])
+            y -= 14
+
+    y -= 14
+    pdf.line(left, y, page_width - left, y)
+    y -= 28
+    pdf.setFont('Helvetica-Bold', 11)
+    pdf.drawString(left, y, 'Receipt number')
+    pdf.drawRightString(page_width - left, y, f'FK-{gym.pk}-{payment.pk:06d}')
+    y -= 22
+
+    payment_date = timezone.localtime(payment.payment_date)
+    details = [
+        ('Member', payment.member.full_name),
+        ('Member ID', payment.member.member_id),
+        ('Member phone', payment.member.phone),
+        ('Payment date', payment_date.strftime('%d %b %Y')),
+        ('Payment method', payment.get_method_display()),
+    ]
+    if payment.subscription:
+        details.append(('Membership', payment.subscription.plan.name if payment.subscription.plan else 'Custom plan'))
+    if payment.reference_number:
+        details.append(('Reference number', payment.reference_number))
+
+    pdf.setFont('Helvetica', 11)
+    for label, value in details:
+        pdf.drawString(left, y, label)
+        pdf.drawRightString(page_width - left, y, str(value)[:100])
+        y -= 22
+
+    y -= 4
+    pdf.line(left, y, page_width - left, y)
+    y -= 28
+    pdf.setFont('Helvetica-Bold', 12)
+    pdf.drawString(left, y, 'Amount paid')
+    pdf.drawRightString(page_width - left, y, f'INR {payment.amount:,.2f}')
+    y -= 38
+    pdf.setFont('Helvetica', 10)
+    pdf.drawString(left, y, 'Payment received. Thank you.')
+    pdf.save()
+
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{get_payment_receipt_filename(payment)}"'
+    return response
 
 
 @login_required

@@ -14,8 +14,9 @@ def get_gym_local_date(gym, value=None):
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     value = value or timezone.now()
     try:
-        tz = ZoneInfo(gym.timezone or 'UTC')
-    except (ZoneInfoNotFoundError, ValueError):
+        tz_name = getattr(gym, 'timezone', None) or 'UTC'
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError, AttributeError):
         tz = ZoneInfo('UTC')
     if timezone.is_naive(value):
         value = timezone.make_aware(value, timezone=tz)
@@ -25,8 +26,9 @@ def get_gym_local_date(gym, value=None):
 def get_gym_timezone(gym):
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     try:
-        return ZoneInfo(gym.timezone or 'UTC')
-    except (ZoneInfoNotFoundError, ValueError):
+        tz_name = getattr(gym, 'timezone', None) or 'UTC'
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError, AttributeError):
         return ZoneInfo('UTC')
 
 

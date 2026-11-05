@@ -1,6 +1,9 @@
 """
 Member views: CRUD operations for gym members.
 """
+import re
+from urllib.parse import quote
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -209,11 +212,27 @@ def member_detail(request, member_id):
     sync_subscription_statuses(member=member)
     member.refresh_from_db()
     from payments.models import Payment
+    from payments.services import (
+        get_payment_receipt_filename, payment_receipt_available,
+    )
     from retention.models import ContactLog
 
+    whatsapp_phone = re.sub(r'\D', '', member.phone or '')
     attendance_records = Attendance.objects.filter(member=member).order_by('-check_in_at')[:10]
     subscriptions = MemberSubscription.objects.filter(member=member).order_by('-start_date')[:5]
-    payments = Payment.objects.filter(member=member).order_by('-payment_date')[:10]
+    payments = list(
+        Payment.objects.filter(member=member)
+        .select_related('member__gym', 'subscription__plan')
+        .order_by('-payment_date')[:10]
+    )
+    for payment in payments:
+        payment.receipt_filename = get_payment_receipt_filename(payment)
+        payment.receipt_available = payment_receipt_available(payment)
+        message = f'Hi {member.full_name}, I am sharing your payment receipt from {gym.name}: {payment.receipt_filename}'
+        payment.whatsapp_url = (
+            f'https://wa.me/{whatsapp_phone}?text={quote(message)}'
+            if whatsapp_phone and payment.receipt_available else ''
+        )
     contact_logs = ContactLog.objects.filter(member=member).order_by('-contact_date')[:10]
 
     latest_subscription = subscriptions[0] if subscriptions else None
@@ -228,6 +247,7 @@ def member_detail(request, member_id):
     context = {
         'gym': gym,
         'member': member,
+        'whatsapp_phone': whatsapp_phone,
         'latest_subscription': latest_subscription,
         'total_due': total_due,
         'checked_in_today': checked_in_today,

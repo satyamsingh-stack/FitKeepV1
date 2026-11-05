@@ -18,7 +18,7 @@ from attendance.views import (
     attendance_home, check_in, qr_display, qr_generate, attendance_history, attendance_report,
 )
 from retention.views import retention_list, contact_log_create, contact_history, retention_report
-from payments.views import payment_list, payment_add, membership_fees
+from payments.views import payment_list, payment_add, membership_fees, payment_receipt_pdf
 from memberships.views import plan_list, plan_add, plan_edit, subscription_list, subscription_add, subscription_edit, subscription_renew
 from notifications.views import notification_list, notification_mark_read, notification_mark_all_read
 from reports.views import dashboard_view, reports_view
@@ -80,6 +80,7 @@ urlpatterns = [
     # Payments
     path('gym/payments/', payment_list, name='payment_list'),
     path('gym/payments/add/', payment_add, name='payment_add'),
+    path('gym/payments/<int:payment_id>/receipt.pdf', payment_receipt_pdf, name='payment_receipt_pdf'),
     path('gym/fees/', membership_fees, name='membership_fees'),
 
     # Attendance

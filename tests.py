@@ -560,6 +560,113 @@ class PaymentServiceTests(TestCase):
         payment = Payment.objects.get(member=self.member)
         self.assertEqual(get_gym_local_date(self.gym, payment.payment_date), payment_date)
 
+    def test_member_detail_hides_receipt_when_membership_balance_is_due(self):
+        payment = record_payment(self.member, 125.50, subscription=self.subscription)
+        self.member.phone = ''
+        self.member.save(update_fields=['phone'])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, f'href="{reverse("payment_receipt_pdf", args=[payment.pk])}"')
+        self.assertContains(response, 'Receipt available after the membership balance is paid in full.')
+        self.assertContains(response, 'Outstanding: ₹873.50')
+        self.assertNotContains(response, 'https://wa.me/')
+
+    def test_member_detail_opens_whatsapp_chat_for_member_with_receipt_message(self):
+        payment = record_payment(self.member, 999, subscription=self.subscription)
+        self.member.phone = '(123) 456-7890'
+        self.member.save(update_fields=['phone'])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'href="https://wa.me/1234567890?text=Hi%20Test%20Member%2C%20I%20am%20sharing%20your%20payment%20receipt%20from%20Test%20Gym%3A%20test-member_test-gym.pdf"',
+            count=2,
+        )
+        self.assertContains(response, 'Open WhatsApp chat for Test Member')
+
+    def test_member_detail_shows_download_but_no_whatsapp_without_member_phone(self):
+        payment = record_payment(self.member, 999, subscription=self.subscription)
+        self.member.phone = ''
+        self.member.save(update_fields=['phone'])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('payment_receipt_pdf', args=[payment.pk]))
+        self.assertContains(response, 'Download PDF')
+        self.assertContains(response, 'Add a member phone number to open WhatsApp.')
+        self.assertNotContains(response, 'https://wa.me/')
+
+    def test_completed_payment_receipt_is_a_gym_scoped_pdf(self):
+        payment = record_payment(self.member, 999, subscription=self.subscription)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="test-member_test-gym.pdf"')
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+        other_gym = Gym.objects.create(name='Other Gym', slug='other-gym', status='active')
+        other_member = MemberProfile.objects.create(gym=other_gym, full_name='Other Member')
+        other_payment = Payment.objects.create(member=other_member, amount=50)
+        self.assertEqual(
+            self.client.get(reverse('payment_receipt_pdf', args=[other_payment.pk])).status_code,
+            404,
+        )
+
+    def test_receipt_download_uses_member_and_gym_name(self):
+        payment = record_payment(self.member, 999, subscription=self.subscription)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'test-member_test-gym.pdf')
+        pdf_response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+        self.assertEqual(
+            pdf_response['Content-Disposition'],
+            'attachment; filename="test-member_test-gym.pdf"',
+        )
+
+    def test_partial_payment_receipt_endpoint_is_blocked_until_balance_is_paid(self):
+        payment = record_payment(self.member, 125.50, subscription=self.subscription)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(
+            response,
+            'A receipt is available after the membership balance has been paid in full.',
+            status_code=403,
+        )
+
+    def test_unlinked_payment_does_not_get_receipt_while_member_has_due_balance(self):
+        payment = record_payment(self.member, 125.50)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_completed_payment_does_not_have_a_receipt(self):
+        payment = Payment.objects.create(member=self.member, amount=50, status='pending')
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('payment_receipt_pdf', args=[payment.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
     def test_get_outstanding_payments(self):
         record_payment(self.member, 500, subscription=self.subscription)
         outstanding = get_outstanding_payments(self.gym)
