@@ -6,13 +6,23 @@ from django.urls import include, path
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views.decorators.cache import never_cache
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 
 from accounts.views import (
-    login_view, logout_view, password_reset_view, password_reset_confirm_view, password_change_view,
+    login_view, logout_view, password_reset_view, password_reset_verify_view,
+    password_reset_resend_otp, password_reset_confirm_view, password_change_view,
     profile_view, gym_setup_wizard, super_admin_dashboard,
 )
-from gyms.views import gym_home, gym_settings_view, register_gym
+from gyms.views import (
+    gym_home,
+    gym_settings_view,
+    gym_workspace_create,
+    gym_workspace_resend_otp,
+    gym_workspace_verify,
+    register_gym,
+    register_gym_resend_otp,
+    register_gym_verify,
+)
 from members.views import member_list, member_add, member_detail, member_edit, member_check_in, member_reset_password
 from attendance.views import (
     attendance_home, check_in, qr_display, qr_generate, attendance_history, attendance_report,
@@ -40,8 +50,13 @@ urlpatterns = [
     path('login/', login_view, name='login'),
     path('logout/', logout_view, name='logout'),
     path('register/', register_gym, name='register_gym'),
+    path('register/verify/', register_gym_verify, name='register_gym_verify'),
+    path('register/resend-otp/', register_gym_resend_otp, name='register_gym_resend_otp'),
     path('password-reset/', password_reset_view, name='password_reset'),
-    path('password-reset/<uidb64>/<token>/', password_reset_confirm_view, name='password_reset_confirm'),
+    path('password-reset/verify/', password_reset_verify_view, name='password_reset_verify'),
+    path('password-reset/resend-otp/', password_reset_resend_otp, name='password_reset_resend_otp'),
+    path('password-reset/confirm/', password_reset_confirm_view, name='password_reset_confirm'),
+    path('password-reset/<uidb64>/<token>/', RedirectView.as_view(url='/password-reset/', permanent=False), name='password_reset_confirm_legacy'),
     path('password-change/', password_change_view, name='password_change'),
     path('profile/', profile_view, name='profile'),
 
@@ -52,8 +67,12 @@ urlpatterns = [
     path('platform/admin/', super_admin_dashboard, name='super_admin_dashboard'),
 
     # Gym-scoped URLs
+    path('gym/workspace/create/', gym_workspace_create, name='gym_workspace_create'),
+    path('gym/workspace/verify/', gym_workspace_verify, name='gym_workspace_verify'),
+    path('gym/workspace/resend-otp/', gym_workspace_resend_otp, name='gym_workspace_resend_otp'),
     path('gym/', gym_home, name='gym_home'),
     path('gym/settings/', gym_settings_view, name='gym_settings'),
+
     path('gym/enquiries/', enquiry_list, name='enquiry_list'),
 
     # Dashboard & reports

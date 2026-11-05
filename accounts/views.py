@@ -1,30 +1,33 @@
 """
 Accounts views: authentication, profile, gym setup wizard.
 """
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.password_validation import validate_password
-from django.core.mail import send_mail
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.http import HttpResponseForbidden, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from accounts.forms import (
-    LoginForm,
-    PasswordResetForm,
-    PasswordResetConfirmForm,
-    PasswordChangeForm,
     GymSetupForm,
+    LoginForm,
+    PasswordChangeForm,
+    PasswordResetConfirmForm,
+    PasswordResetForm,
 )
 from accounts.models import GymMembership
 from audit.models import AuditLog
-from gyms.models import Gym
 from gyms.services import get_user_gym
+from gyms.workspace_otp import (
+    OTPVerificationError,
+    create_password_reset_otp,
+    get_password_reset_otp_status,
+    resend_password_reset_otp,
+    verify_password_reset_otp,
+)
 
 
 def login_view(request):
@@ -78,26 +81,24 @@ def logout_view(request):
 
 
 def password_reset_view(request):
-    """Send a time-limited password reset link without revealing account existence."""
+    """Send an OTP for password reset without revealing account existence."""
     if request.method == 'POST':
         form = PasswordResetForm(request.POST)
         if form.is_valid():
-            user = form.user
-            if user and user.is_active and user.email:
-                uid = urlsafe_base64_encode(force_bytes(user.pk))
-                token = default_token_generator.make_token(user)
-                reset_url = request.build_absolute_uri(reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token}))
-                try:
-                    send_mail(
-                        subject='Reset your FitKeep password',
-                        message=f'Use this link to reset your FitKeep password. If you did not request this, ignore this email.\n\n{reset_url}',
-                        from_email=None,
-                        recipient_list=[user.email],
-                        fail_silently=False,
-                    )
-                except Exception:
-                    # Keep the response generic to avoid disclosing account existence.
-                    pass
+            email = form.cleaned_data['email']
+            try:
+                sent = create_password_reset_otp(email=email, request=request)
+            except OTPVerificationError as exc:
+                form.add_error(None, str(exc))
+                return render(request, 'accounts/password_reset.html', {'form': form})
+            except Exception:
+                sent = False
+            # Clear any prior verified-reset state when a new request is made.
+            request.session.pop('password_reset_verified_user_id', None)
+            request.session.pop('password_reset_verified_at', None)
+            if sent:
+                messages.success(request, 'We sent a 6-digit verification code to your email.')
+                return redirect('password_reset_verify')
             messages.info(request, 'If an account exists for that email, password reset instructions have been sent.')
             return redirect('login')
     else:
@@ -105,17 +106,76 @@ def password_reset_view(request):
     return render(request, 'accounts/password_reset.html', {'form': form})
 
 
-def password_reset_confirm_view(request, uidb64, token):
-    """Validate a signed reset token and allow the account owner to set a new password."""
+def password_reset_verify_view(request):
+    """Verify OTP before allowing password reset."""
+    status = get_password_reset_otp_status(request=request)
+    if request.method == 'GET' and not status:
+        messages.info(request, 'Enter your email to receive a verification code.')
+        return redirect('password_reset')
+
+    from accounts.forms import GymWorkspaceOTPVerifyForm
+    form = GymWorkspaceOTPVerifyForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        try:
+            user = verify_password_reset_otp(
+                code=form.cleaned_data['otp_code'],
+                request=request,
+            )
+        except OTPVerificationError as exc:
+            messages.error(request, str(exc))
+            status = get_password_reset_otp_status(request=request)
+            if not status:
+                return redirect('password_reset')
+        else:
+            request.session['password_reset_verified_user_id'] = user.pk
+            request.session['password_reset_verified_at'] = str(int(__import__('time').time()))
+            request.session.modified = True
+            messages.success(request, 'Code verified. Choose a new password.')
+            return redirect('password_reset_confirm')
+
+    status = get_password_reset_otp_status(request=request)
+    if not status and request.method != 'POST':
+        return redirect('password_reset')
+    return render(request, 'accounts/password_reset_verify_otp.html', {
+        'form': form,
+        'masked_email': (status or {}).get('masked_email', ''),
+        'expires_in': (status or {}).get('expires_in', 0),
+        'otp_from_email': getattr(settings, 'GYM_WORKSPACE_OTP_FROM_EMAIL', 'satyams0478@gmail.com'),
+    })
+
+
+@require_POST
+def password_reset_resend_otp(request):
+    try:
+        resend_password_reset_otp(request=request)
+        messages.success(request, 'A new verification code was sent to your email.')
+    except OTPVerificationError as exc:
+        messages.error(request, str(exc))
+    except Exception:
+        messages.error(request, 'We could not resend the verification code right now. Please try again.')
+    status = get_password_reset_otp_status(request=request)
+    if not status:
+        return redirect('password_reset')
+    return redirect('password_reset_verify')
+
+
+def password_reset_confirm_view(request):
+    """Allow the verified account owner to set a new password."""
     from django.contrib.auth import get_user_model
     User = get_user_model()
+    verified_user_id = request.session.get('password_reset_verified_user_id')
+    verified_at = request.session.get('password_reset_verified_at')
+    user = None
     try:
-        uid = force_str(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid, is_active=True)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        # Verified reset state is short-lived (15 minutes) and single-use.
+        if verified_user_id and verified_at and (int(__import__('time').time()) - int(verified_at)) <= 900:
+            user = User.objects.filter(pk=verified_user_id, is_active=True).first()
+    except Exception:
         user = None
-    if not user or not default_token_generator.check_token(user, token):
-        messages.error(request, 'This password reset link is invalid or has expired. Request a new one.')
+    if not user:
+        request.session.pop('password_reset_verified_user_id', None)
+        request.session.pop('password_reset_verified_at', None)
+        messages.error(request, 'Your password reset session is invalid or has expired. Request a new code.')
         return redirect('password_reset')
 
     if request.method == 'POST':
@@ -128,6 +188,14 @@ def password_reset_confirm_view(request, uidb64, token):
             else:
                 user.set_password(form.cleaned_data['new_password'])
                 user.save(update_fields=['password'])
+                request.session.pop('password_reset_verified_user_id', None)
+                request.session.pop('password_reset_verified_at', None)
+                AuditLog.log_action(
+                    actor=user,
+                    action='update',
+                    metadata={'event': 'password_reset_completed'},
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                )
                 messages.success(request, 'Your password has been reset. You can now sign in.')
                 return redirect('login')
     else:

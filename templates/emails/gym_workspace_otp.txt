@@ -1,0 +1,18 @@
+{% if purpose == 'password_reset' %}FitKeep password reset code
+
+Use this code to reset your FitKeep password:
+{{ code }}
+
+This code expires in {{ expiry_minutes }} minutes.
+If you did not request this, you can ignore this email and your password will not be changed.
+{% else %}FitKeep gym workspace verification
+
+Use this code to verify {{ gym_name }}:
+{{ code }}
+
+This code expires in {{ expiry_minutes }} minutes.
+If you did not request this, you can ignore this email and the workspace will not be created.
+{% endif %}
+
+Sent by FitKeep from {{ otp_from_email|default:"satyams0478@gmail.com" }}
+

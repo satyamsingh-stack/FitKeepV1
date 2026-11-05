@@ -142,7 +142,18 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@gymplatform.local')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'FitKeep <satyams0478@gmail.com>')
+GYM_WORKSPACE_OTP_FROM_EMAIL = os.environ.get('GYM_WORKSPACE_OTP_FROM_EMAIL', DEFAULT_FROM_EMAIL)
+GYM_WORKSPACE_OTP_EXPIRY_MINUTES = int(os.environ.get('GYM_WORKSPACE_OTP_EXPIRY_MINUTES', '15'))
+GYM_WORKSPACE_OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get('GYM_WORKSPACE_OTP_RESEND_COOLDOWN_SECONDS', '45'))
+GYM_WORKSPACE_OTP_MAX_ATTEMPTS = int(os.environ.get('GYM_WORKSPACE_OTP_MAX_ATTEMPTS', '5'))
 
 # SMS provider config (optional)
 SMS_PROVIDER = os.environ.get('SMS_PROVIDER', None)
