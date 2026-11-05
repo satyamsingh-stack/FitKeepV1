@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -85,3 +86,58 @@ class Gym(models.Model):
             from django.utils import timezone
             return timezone.now() < self.subscription_ends_at
         return self.status == 'active'
+
+
+class GymWorkspaceOTP(models.Model):
+    """Server-side OTP challenge for sensitive gym workspace actions."""
+
+    PURPOSE_CREATE_WORKSPACE = 'create_workspace'
+    PURPOSE_REGISTER_GYM = 'register_gym'
+    PURPOSE_PASSWORD_RESET = 'password_reset'
+    PURPOSE_CHOICES = [
+        (PURPOSE_CREATE_WORKSPACE, 'Create gym workspace'),
+        (PURPOSE_REGISTER_GYM, 'Register gym workspace'),
+        (PURPOSE_PASSWORD_RESET, 'Password reset'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='gym_workspace_otps',
+        null=True,
+        blank=True,
+    )
+    session_key = models.CharField(max_length=64, blank=True, db_index=True)
+    email = models.EmailField()
+    purpose = models.CharField(max_length=40, choices=PURPOSE_CHOICES, db_index=True)
+    code_hash = models.CharField(max_length=128)
+    pending_data = models.TextField(help_text='JSON payload stored until verification succeeds.')
+    attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
+    expires_at = models.DateTimeField(db_index=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    consumed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    request_ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'purpose', 'consumed_at']),
+            models.Index(fields=['session_key', 'purpose', 'consumed_at']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def __str__(self):
+        target = self.email or (self.user_id and f'user:{self.user_id}') or 'pending'
+        return f'Workspace OTP for {target} ({self.purpose})'
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_active(self):
+        return self.consumed_at is None and not self.is_expired

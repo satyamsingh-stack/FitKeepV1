@@ -10,7 +10,7 @@ from django.core.validators import EmailValidator
 from django.utils.translation import gettext_lazy as _
 
 from accounts.models import GymMembership
-from gyms.models import Gym
+from gyms.models import Gym, GymWorkspaceOTP
 
 # ---------------------------------------------------------------------------
 # Disposable / throwaway email domain blocklist
@@ -245,3 +245,60 @@ class GymSetupForm(forms.Form):
     allow_manual_checkin = forms.BooleanField(required=False, initial=True)
     weekly_attendance_goal = forms.IntegerField(min_value=1, initial=3)
     auto_renew_enabled = forms.BooleanField(required=False, initial=False)
+
+
+class GymWorkspaceCreateForm(forms.Form):
+    """Collect gym workspace details before OTP verification."""
+
+    gym_name = forms.CharField(max_length=200, label=_('Gym Name'))
+    gym_address = forms.CharField(
+        required=False,
+        label=_('Gym Address'),
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+    gym_phone = forms.CharField(required=False, max_length=20, label=_('Gym Phone'))
+    gym_email = forms.EmailField(required=False, label=_('Gym Email'))
+    timezone = forms.CharField(max_length=64, initial='Asia/Kolkata', label=_('Timezone'))
+    currency = forms.CharField(max_length=8, initial='INR', label=_('Currency'))
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        for name, field in self.fields.items():
+            css = 'form-control'
+            field.widget.attrs.setdefault('class', css)
+            if name == 'gym_name':
+                field.widget.attrs.setdefault('autofocus', 'autofocus')
+
+    def clean_gym_email(self):
+        email = (self.cleaned_data.get('gym_email') or '').strip().lower()
+        if not email and self.user and getattr(self.user, 'email', None):
+            email = self.user.email.strip().lower()
+        if email:
+            email = _validate_email_strict(email)
+        return email
+
+
+class GymWorkspaceOTPVerifyForm(forms.Form):
+    """Verify the 6-digit code sent to the user's registered email."""
+
+    otp_code = forms.CharField(
+        label=_('Verification code'),
+        min_length=6,
+        max_length=6,
+        widget=forms.TextInput(attrs={
+            'inputmode': 'numeric',
+            'autocomplete': 'one-time-code',
+            'pattern': r'\d{6}',
+            'maxlength': '6',
+            'placeholder': '000000',
+            'class': 'form-control otp-single-input',
+            'aria-label': '6-digit verification code',
+        }),
+    )
+
+    def clean_otp_code(self):
+        code = (self.cleaned_data.get('otp_code') or '').strip().replace(' ', '').replace('-', '')
+        if not (code.isdigit() and len(code) == 6):
+            raise ValidationError(_('Enter the 6-digit code sent to your email.'))
+        return code
