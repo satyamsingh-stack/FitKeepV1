@@ -26,12 +26,15 @@ from gyms.workspace_otp import (
     create_registration_otp,
     create_workspace_otp,
     get_password_reset_otp_status,
+    get_registration_fitkeep_admin_otp_status,
     get_registration_otp_status,
     get_workspace_otp_status,
     resend_password_reset_otp,
+    resend_registration_fitkeep_admin_otp,
     resend_registration_otp,
     resend_workspace_otp,
     verify_password_reset_otp,
+    verify_registration_fitkeep_admin_otp,
     verify_registration_otp,
     verify_workspace_otp,
     _active_otp_for,
@@ -141,7 +144,12 @@ class OTPHelperTests(TestCase):
                 _issue_otp(session_key=key, purpose=GymWorkspaceOTP.PURPOSE_PASSWORD_RESET, email='x@example.com', payload={'gym_name': 'FitKeep'}, request=req)
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_verify_common_no_otp_invalid_code_and_max_attempts_precheck(self):
+    def test_verify_registration_fitkeep_admin_requires_verified_owner_flag(self):
+        req = _request_with_session(RequestFactory(), '/register/')
+        GymWorkspaceOTP.objects.create(session_key=req.session.session_key, email='satyamakhilesh2000@gmail.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP, code_hash='h', pending_data=json.dumps({'name':'N','email':'g9@example.com','phone':'','password_hash':'h','gym_name':'G','owner_email_verified': False}), expires_at=timezone.now()+timedelta(minutes=5))
+        with patch('gyms.workspace_otp.check_password', return_value=True):
+            with self.assertRaisesMessage(OTPVerificationError, 'Owner email verification is required'):
+                verify_registration_fitkeep_admin_otp(code='123456', request=req)
         req = _request_with_session(RequestFactory())
         with self.assertRaisesMessage(OTPVerificationError, 'expired'):
             _verify_common(None, '123456', expired_message='expired')
@@ -185,6 +193,7 @@ class OTPHelperTests(TestCase):
                 raise RuntimeError('no session')
         self.assertIsNone(get_registration_otp_status(request=BadReq()))
         self.assertIsNone(get_password_reset_otp_status(request=BadReq()))
+        self.assertIsNone(get_registration_fitkeep_admin_otp_status(request=BadReq()))
 
     def test_lock_consume_finalize_and_resend_errors(self):
         req = _request_with_session(RequestFactory())
@@ -243,8 +252,8 @@ class WorkspaceAndRegistrationOTPServiceTests(TestCase):
         self.assertTrue(membership.is_primary)
         self.assertTrue(GymSettings.objects.filter(gym=gym).exists())
 
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_registration_otp_create_resend_verify(self):
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', FITKEEP_ADMIN_VERIFICATION_EMAIL='satyamakhilesh2000@gmail.com')
+    def test_registration_otp_two_step_fitkeep_admin_verification(self):
         req = _request_with_session(self.rf, '/register/')
         data = {'name': 'Owner', 'email': 'newowner@example.com', 'phone': '9999999999', 'password': 'StrongPass123!', 'gym_name': 'New Gym', 'gym_address': 'Addr'}
         otp = create_registration_otp(registration_data=data, request=req)
@@ -255,10 +264,26 @@ class WorkspaceAndRegistrationOTPServiceTests(TestCase):
         User.objects.create_user(username='taken@example.com', email='taken@example.com', password='StrongPass123!')
         with self.assertRaises(OTPVerificationError):
             create_registration_otp(registration_data={**data, 'email': 'taken@example.com'}, request=req2)
+        # step 1: owner email verification moves to FitKeep admin verification
         with patch('gyms.workspace_otp.check_password', return_value=True):
-            user, gym = verify_registration_otp(code='123456', request=req)
+            result = verify_registration_otp(code='123456', request=req)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result.get('next'), 'fitkeep_admin_verification')
+        self.assertEqual(result.get('admin_email'), 'satyamakhilesh2000@gmail.com')
+        self.assertIsNone(get_registration_otp_status(request=req))
+        admin_status = get_registration_fitkeep_admin_otp_status(request=req)
+        self.assertIsNotNone(admin_status)
+        self.assertEqual(admin_status['masked_email'], _mask_email('satyamakhilesh2000@gmail.com'))
+        self.assertFalse(User.objects.filter(email='newowner@example.com').exists())
+        fitkeep_otp = _active_otp_for(session_key=req.session.session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP)
+        self.assertIsNotNone(fitkeep_otp)
+        GymWorkspaceOTP.objects.filter(pk=fitkeep_otp.pk).update(last_sent_at=timezone.now() - timedelta(minutes=10))
+        resend_registration_fitkeep_admin_otp(request=req)
+        with patch('gyms.workspace_otp.check_password', return_value=True):
+            user, gym = verify_registration_fitkeep_admin_otp(code='123456', request=req)
         self.assertEqual(user.email, 'newowner@example.com')
         self.assertTrue(GymMembership.objects.filter(user=user, gym=gym, is_primary=True).exists())
+        self.assertIsNone(get_registration_fitkeep_admin_otp_status(request=req))
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_workspace_otp_guard_branches(self):
@@ -280,22 +305,35 @@ class WorkspaceAndRegistrationOTPServiceTests(TestCase):
             create_registration_otp(registration_data=base, request=req2)
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_registration_verify_phone_race_guard(self):
+    def test_verify_registration_fitkeep_admin_otp_expired_and_missing(self):
         req = _request_with_session(self.rf, '/register/')
-        GymWorkspaceOTP.objects.create(session_key=req.session.session_key, email='x2@example.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM, code_hash='h', pending_data=json.dumps({'name':'N','email':'x2@example.com','phone':'7777777777','password_hash':'h','gym_name':'G'}), expires_at=timezone.now()+timedelta(minutes=5))
-        User.objects.create_user(username='p2@example.com', email='p2@example.com', phone='7777777777', password='StrongPass123!')
-        with patch('gyms.workspace_otp.check_password', return_value=True):
-            with self.assertRaisesMessage(OTPVerificationError, 'phone number is no longer available'):
-                verify_registration_otp(code='123456', request=req)
+        with self.assertRaisesMessage(OTPVerificationError, 'expired'):
+            verify_registration_fitkeep_admin_otp(code='123456', request=req)
+        # resend missing session guard
+        with self.assertRaisesMessage(OTPVerificationError, 'expired'):
+            resend_registration_fitkeep_admin_otp(request=req)
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-    def test_registration_verify_email_race_guard(self):
+    def test_registration_fitkeep_admin_verify_guards_and_email_subject(self):
         req = _request_with_session(self.rf, '/register/')
-        GymWorkspaceOTP.objects.create(session_key=req.session.session_key, email='dup3@example.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM, code_hash='h', pending_data=json.dumps({'name':'N','email':'dup3@example.com','phone':'','password_hash':'h','gym_name':'G'}), expires_at=timezone.now()+timedelta(minutes=5))
-        User.objects.create_user(username='dup3@example.com', email='dup3@example.com', password='StrongPass123!')
+        GymWorkspaceOTP.objects.create(session_key=req.session.session_key, email='satyamakhilesh2000@gmail.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP, code_hash='h', pending_data=json.dumps({'name':'N','email':'g1@example.com','phone':'','password_hash':'h','gym_name':'G','owner_email_verified': False}), expires_at=timezone.now()+timedelta(minutes=5))
+        with patch('gyms.workspace_otp.check_password', return_value=True):
+            with self.assertRaisesMessage(OTPVerificationError, 'Owner email verification is required'):
+                verify_registration_fitkeep_admin_otp(code='123456', request=req)
+        req2 = _request_with_session(self.rf, '/register/')
+        GymWorkspaceOTP.objects.create(session_key=req2.session.session_key, email='satyamakhilesh2000@gmail.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP, code_hash='h', pending_data=json.dumps({'name':'N','email':'g2@example.com','phone':'','password_hash':'h','gym_name':'G','owner_email_verified': True}), expires_at=timezone.now()+timedelta(minutes=5))
+        User.objects.create_user(username='g2@example.com', email='g2@example.com', password='StrongPass123!')
         with patch('gyms.workspace_otp.check_password', return_value=True):
             with self.assertRaisesMessage(OTPVerificationError, 'email is no longer available'):
-                verify_registration_otp(code='123456', request=req)
+                verify_registration_fitkeep_admin_otp(code='123456', request=req2)
+        req3 = _request_with_session(self.rf, '/register/')
+        GymWorkspaceOTP.objects.create(session_key=req3.session.session_key, email='satyamakhilesh2000@gmail.com', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP, code_hash='h', pending_data=json.dumps({'name':'N','email':'g3@example.com','phone':'6666666666','password_hash':'h','gym_name':'G','owner_email_verified': True}), expires_at=timezone.now()+timedelta(minutes=5))
+        User.objects.create_user(username='p3@example.com', email='p3@example.com', phone='6666666666', password='StrongPass123!')
+        with patch('gyms.workspace_otp.check_password', return_value=True):
+            with self.assertRaisesMessage(OTPVerificationError, 'phone number is no longer available'):
+                verify_registration_fitkeep_admin_otp(code='123456', request=req3)
+        _send_workspace_otp_email(email='satyamakhilesh2000@gmail.com', code='123456', gym_name='G', purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP)
+        self.assertTrue(any('FitKeep admin verification' in m.subject for m in mail.outbox))
 
 
 class PasswordResetOTPServiceTests(TestCase):

@@ -28,10 +28,13 @@ from gyms.workspace_otp import (
     OTPVerificationError,
     create_registration_otp,
     create_workspace_otp,
+    get_registration_fitkeep_admin_otp_status,
     get_registration_otp_status,
     get_workspace_otp_status,
+    resend_registration_fitkeep_admin_otp,
     resend_registration_otp,
     resend_workspace_otp,
+    verify_registration_fitkeep_admin_otp,
     verify_registration_otp,
     verify_workspace_otp,
 )
@@ -240,9 +243,12 @@ def register_gym(request):
 
 
 def register_gym_verify(request):
-    """Verify registration OTP, then create owner account + gym workspace."""
+    """Verify owner email OTP, then require FitKeep admin verification."""
     if request.user.is_authenticated and not getattr(request.user, 'is_super_admin', False):
         return redirect('gym_workspace_create')
+    admin_status = get_registration_fitkeep_admin_otp_status(request=request)
+    if admin_status:
+        return redirect('register_gym_fitkeep_verify')
     status = get_registration_otp_status(request=request)
     if request.method == 'GET' and not status:
         messages.info(request, 'Enter your details to receive a verification code.')
@@ -251,20 +257,30 @@ def register_gym_verify(request):
     form = GymWorkspaceOTPVerifyForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         try:
-            user, gym = verify_registration_otp(
+            result = verify_registration_otp(
                 code=form.cleaned_data['otp_code'],
                 request=request,
             )
         except OTPVerificationError as exc:
             messages.error(request, str(exc))
+            admin_status = get_registration_fitkeep_admin_otp_status(request=request)
+            if admin_status:
+                return redirect('register_gym_fitkeep_verify')
             status = get_registration_otp_status(request=request)
             if not status:
                 return redirect('register_gym')
         else:
+            if isinstance(result, dict) and result.get('next') == 'fitkeep_admin_verification':
+                messages.success(request, 'Your email is verified. Enter the FitKeep admin verification code to complete registration.')
+                return redirect('register_gym_fitkeep_verify')
+            user, gym = result
             auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, f'"{gym.name}" workspace created and verified successfully.')
             return redirect('dashboard')
 
+    admin_status = get_registration_fitkeep_admin_otp_status(request=request)
+    if admin_status:
+        return redirect('register_gym_fitkeep_verify')
     status = get_registration_otp_status(request=request)
     if not status:
         return redirect('register_gym')
@@ -275,7 +291,68 @@ def register_gym_verify(request):
         'resend_available_in': status['resend_available_in'],
         'expires_in': status['expires_in'],
         'otp_from_email': getattr(settings, 'GYM_WORKSPACE_OTP_FROM_EMAIL', 'satyams0478@gmail.com'),
+        'verification_stage': 'owner_email',
     })
+
+
+def register_gym_fitkeep_verify(request):
+    """Second registration verification: OTP sent to FitKeep admin email."""
+    if request.user.is_authenticated and not getattr(request.user, 'is_super_admin', False):
+        return redirect('gym_workspace_create')
+    status = get_registration_fitkeep_admin_otp_status(request=request)
+    if request.method == 'GET' and not status:
+        owner_status = get_registration_otp_status(request=request)
+        if owner_status:
+            return redirect('register_gym_verify')
+        messages.info(request, 'Complete gym registration and owner email verification first.')
+        return redirect('register_gym')
+
+    form = GymWorkspaceOTPVerifyForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        try:
+            user, gym = verify_registration_fitkeep_admin_otp(
+                code=form.cleaned_data['otp_code'],
+                request=request,
+            )
+        except OTPVerificationError as exc:
+            messages.error(request, str(exc))
+            status = get_registration_fitkeep_admin_otp_status(request=request)
+            if not status:
+                return redirect('register_gym')
+        else:
+            auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            messages.success(request, f'"{gym.name}" workspace created after FitKeep admin verification.')
+            return redirect('dashboard')
+
+    status = get_registration_fitkeep_admin_otp_status(request=request)
+    if not status:
+        return redirect('register_gym')
+    return render(request, 'accounts/register_verify_fitkeep_otp.html', {
+        'form': form,
+        'masked_email': status['masked_email'],
+        'gym_name': status['gym_name'],
+        'resend_available_in': status['resend_available_in'],
+        'expires_in': status['expires_in'],
+        'otp_from_email': getattr(settings, 'GYM_WORKSPACE_OTP_FROM_EMAIL', 'satyams0478@gmail.com'),
+        'verification_stage': 'fitkeep_admin',
+    })
+
+
+@require_POST
+def register_gym_fitkeep_resend_otp(request):
+    if request.user.is_authenticated and not getattr(request.user, 'is_super_admin', False):
+        return redirect('gym_workspace_create')
+    try:
+        resend_registration_fitkeep_admin_otp(request=request)
+        messages.success(request, 'A new FitKeep admin verification code was sent.')
+    except OTPVerificationError as exc:
+        messages.error(request, str(exc))
+    except Exception:
+        messages.error(request, 'We could not resend the FitKeep verification code right now. Please try again.')
+    status = get_registration_fitkeep_admin_otp_status(request=request)
+    if not status:
+        return redirect('register_gym')
+    return redirect('register_gym_fitkeep_verify')
 
 
 @require_POST

@@ -86,10 +86,21 @@ def _ensure_session_key(request):
     return request.session.session_key
 
 
+FITKEEP_ADMIN_VERIFICATION_EMAIL = "satyamakhilesh2000@gmail.com"
+
+
+def _get_fitkeep_admin_email() -> str:
+    return _normalize_email(
+        getattr(settings, "FITKEEP_ADMIN_VERIFICATION_EMAIL", None) or FITKEEP_ADMIN_VERIFICATION_EMAIL
+    )
+
+
 def _send_workspace_otp_email(*, email: str, code: str, gym_name: str, purpose: str) -> None:
     subject = "Verify your FitKeep gym workspace"
     if purpose == GymWorkspaceOTP.PURPOSE_REGISTER_GYM:
         subject = "Verify your FitKeep account and gym workspace"
+    elif purpose == GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP:
+        subject = "FitKeep admin verification required for new gym registration"
     elif purpose == GymWorkspaceOTP.PURPOSE_PASSWORD_RESET:
         subject = "Your FitKeep password reset code"
     from_email = getattr(settings, "GYM_WORKSPACE_OTP_FROM_EMAIL", None) or "satyams0478@gmail.com"
@@ -296,6 +307,7 @@ def verify_workspace_otp(*, user, code: str, request=None) -> Gym:
 
 
 def verify_registration_otp(*, code: str, request=None):
+    """Verify owner email, then require FitKeep admin verification before creation."""
     session_key = _ensure_session_key(request)
     otp = _active_otp_for(session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM)
     payload = _verify_common(
@@ -312,6 +324,49 @@ def verify_registration_otp(*, code: str, request=None):
     if phone and User.objects.filter(phone=phone).exists():
         _consume(otp)
         raise OTPVerificationError("That phone number is no longer available. Please start registration again.")
+    admin_email = _get_fitkeep_admin_email()
+    pending = dict(payload)
+    pending["owner_email_verified"] = True
+    pending["fitkeep_admin_email"] = admin_email
+    with transaction.atomic():
+        locked = _lock_active(otp)
+        _finalize_otp(locked, session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM)
+    _issue_otp(
+        session_key=session_key,
+        purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP,
+        email=admin_email,
+        payload=pending,
+        request=request,
+    )
+    AuditLog.log_action(
+        actor=None,
+        action="update",
+        metadata={"event": "register_gym_owner_verified_admin_otp_sent", "owner_email": _mask_email(email), "admin_email": _mask_email(admin_email)},
+        ip_address=request.META.get("REMOTE_ADDR") if request else None,
+    )
+    return {"next": "fitkeep_admin_verification", "owner_email": email, "admin_email": admin_email}
+
+
+def verify_registration_fitkeep_admin_otp(*, code: str, request=None):
+    session_key = _ensure_session_key(request)
+    otp = _active_otp_for(session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP)
+    payload = _verify_common(
+        otp,
+        code,
+        expired_message="FitKeep admin verification code has expired. Please restart registration.",
+    )
+    User = get_user_model()
+    email = _normalize_email(payload.get("email"))
+    phone = (payload.get("phone") or "").strip()
+    if not email or User.objects.filter(email=email).exists():
+        _consume(otp)
+        raise OTPVerificationError("That email is no longer available. Please start registration again.")
+    if phone and User.objects.filter(phone=phone).exists():
+        _consume(otp)
+        raise OTPVerificationError("That phone number is no longer available. Please start registration again.")
+    if not payload.get("owner_email_verified"):
+        _consume(otp)
+        raise OTPVerificationError("Owner email verification is required. Please start registration again.")
     with transaction.atomic():
         locked = _lock_active(otp)
         user = User(
@@ -332,10 +387,10 @@ def verify_registration_otp(*, code: str, request=None):
         )
         GymMembership.objects.create(user=user, gym=gym, role="owner", is_primary=True, status="active")
         GymSettings.objects.create(gym=gym)
-        _finalize_otp(locked, session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM)
+        _finalize_otp(locked, session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP)
     AuditLog.log_action(
         actor=user, action="create", gym=gym, target=gym,
-        metadata={"registration": "gym_owner", "verified_by": "email_otp"},
+        metadata={"registration": "gym_owner", "verified_by": "email_otp_fitkeep_admin"},
         ip_address=request.META.get("REMOTE_ADDR") if request else None,
     )
     return user, gym
@@ -401,6 +456,25 @@ def get_registration_otp_status(*, request):
         return None
     otp = _active_otp_for(session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM)
     return _status_payload(otp)
+
+
+def get_registration_fitkeep_admin_otp_status(*, request):
+    try:
+        session_key = _ensure_session_key(request)
+    except Exception:
+        return None
+    otp = _active_otp_for(session_key=session_key, purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP)
+    return _status_payload(otp)
+
+
+def resend_registration_fitkeep_admin_otp(*, request=None) -> GymWorkspaceOTP:
+    session_key = _ensure_session_key(request)
+    return _resend_otp(
+        session_key=session_key,
+        purpose=GymWorkspaceOTP.PURPOSE_REGISTER_GYM_FITKEEP,
+        start_over_message="FitKeep admin verification expired. Please start registration again.",
+        request=request,
+    )
 
 
 def create_password_reset_otp(*, email: str, request=None) -> bool:

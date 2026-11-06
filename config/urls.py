@@ -20,6 +20,8 @@ from gyms.views import (
     gym_workspace_resend_otp,
     gym_workspace_verify,
     register_gym,
+    register_gym_fitkeep_resend_otp,
+    register_gym_fitkeep_verify,
     register_gym_resend_otp,
     register_gym_verify,
 )
@@ -52,6 +54,8 @@ urlpatterns = [
     path('register/', register_gym, name='register_gym'),
     path('register/verify/', register_gym_verify, name='register_gym_verify'),
     path('register/resend-otp/', register_gym_resend_otp, name='register_gym_resend_otp'),
+    path('register/fitkeep-verify/', register_gym_fitkeep_verify, name='register_gym_fitkeep_verify'),
+    path('register/fitkeep-resend-otp/', register_gym_fitkeep_resend_otp, name='register_gym_fitkeep_resend_otp'),
     path('password-reset/', password_reset_view, name='password_reset'),
     path('password-reset/verify/', password_reset_verify_view, name='password_reset_verify'),
     path('password-reset/resend-otp/', password_reset_resend_otp, name='password_reset_resend_otp'),

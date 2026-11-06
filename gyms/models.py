@@ -93,10 +93,12 @@ class GymWorkspaceOTP(models.Model):
 
     PURPOSE_CREATE_WORKSPACE = 'create_workspace'
     PURPOSE_REGISTER_GYM = 'register_gym'
+    PURPOSE_REGISTER_GYM_FITKEEP = 'register_gym_fitkeep'
     PURPOSE_PASSWORD_RESET = 'password_reset'
     PURPOSE_CHOICES = [
         (PURPOSE_CREATE_WORKSPACE, 'Create gym workspace'),
         (PURPOSE_REGISTER_GYM, 'Register gym workspace'),
+        (PURPOSE_REGISTER_GYM_FITKEEP, 'FitKeep admin registration verification'),
         (PURPOSE_PASSWORD_RESET, 'Password reset'),
     ]
 
