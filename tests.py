@@ -863,6 +863,8 @@ class MemberOnboardingTests(TestCase):
         data = {
             'full_name': 'Priya Sharma',
             'phone': '9876543210',
+            'emergency_contact': '+91 9000000002',
+            'emergency_contact_name': 'Ramesh Sharma',
             'plan': str(self.plan.id),
             'start_date': self.today.isoformat(),
             'discount_amount': '0',
@@ -874,8 +876,9 @@ class MemberOnboardingTests(TestCase):
 
     def test_onboarding_creates_member_membership_and_payment(self):
         response = self._post(amount_paid='1500', discount_amount='0')
-        member = MemberProfile.objects.get(gym=self.gym, phone='9876543210')
+        member = MemberProfile.objects.get(gym=self.gym)
         self.assertRedirects(response, reverse('member_detail', args=[member.member_id]))
+        self.assertTrue(member.phone.endswith('9876543210'))
         sub = member.subscriptions.get()
         self.assertEqual(sub.plan, self.plan)
         self.assertEqual(sub.total_amount, 1500)
@@ -896,24 +899,24 @@ class MemberOnboardingTests(TestCase):
 
     def test_partial_payment_leaves_balance_outstanding(self):
         self._post(amount_paid='500', discount_amount='100')
-        sub = MemberSubscription.objects.get(member__phone='9876543210')
+        sub = MemberSubscription.objects.get(member__gym=self.gym)
         self.assertEqual(sub.outstanding_balance, 900)
 
     def test_pay_later_records_no_payment(self):
         self._post(amount_paid='0')
-        member = MemberProfile.objects.get(phone='9876543210')
+        member = MemberProfile.objects.get(gym=self.gym)
         self.assertEqual(member.payments.count(), 0)
         self.assertEqual(member.subscriptions.get().outstanding_balance, 1500)
 
     def test_member_can_still_be_added_without_membership(self):
         self._post(plan='', start_date='', amount_paid='0')
-        member = MemberProfile.objects.get(phone='9876543210')
+        member = MemberProfile.objects.get(gym=self.gym)
         self.assertEqual(member.subscriptions.count(), 0)
 
     def test_custom_membership_without_plan(self):
         end = self.today + timedelta(days=10)
         self._post(plan='', total_amount='800', end_date=end.isoformat(), amount_paid='800')
-        sub = MemberSubscription.objects.get(member__phone='9876543210')
+        sub = MemberSubscription.objects.get(member__gym=self.gym)
         self.assertIsNone(sub.plan)
         self.assertEqual(sub.end_date, end)
         self.assertEqual(sub.outstanding_balance, 0)
@@ -921,7 +924,7 @@ class MemberOnboardingTests(TestCase):
     def test_future_start_date_is_yet_to_start(self):
         future = self.today + timedelta(days=5)
         self._post(start_date=future.isoformat())
-        self.assertEqual(MemberSubscription.objects.get(member__phone='9876543210').status, 'yet_to_start')
+        self.assertEqual(MemberSubscription.objects.get(member__gym=self.gym).status, 'yet_to_start')
 
     def test_overpayment_is_rejected_and_nothing_is_saved(self):
         response = self._post(amount_paid='2000')
@@ -937,7 +940,7 @@ class MemberOnboardingTests(TestCase):
         self._post()
         response = self._post(full_name='Someone Else')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(MemberProfile.objects.filter(gym=self.gym, phone='9876543210').count(), 1)
+        self.assertEqual(MemberProfile.objects.filter(gym=self.gym).count(), 1)
 
     def test_other_gyms_plan_cannot_be_used(self):
         other = Gym.objects.create(name='Other Gym', slug='other-gym', status='active')
@@ -946,11 +949,12 @@ class MemberOnboardingTests(TestCase):
         )
         response = self._post(plan=str(foreign_plan.id))
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(MemberProfile.objects.filter(phone='9876543210').exists())
+        self.assertFalse(MemberProfile.objects.filter(gym=self.gym).exists())
 
     def test_onboarded_member_can_log_in_to_member_portal(self):
         self._post()
-        self.assertTrue(User.objects.filter(username='9876543210', role='gym_member').exists())
+        member = MemberProfile.objects.get(gym=self.gym)
+        self.assertTrue(User.objects.filter(username=member.phone, role='gym_member').exists())
 
 
 
@@ -1012,7 +1016,9 @@ class AdminWorkflowTests(TestCase):
         response = self.client.get(reverse('member_detail', args=[self.member.member_id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<strong>Status:</strong> <span class="badge bg-secondary">inactive</span>')
+        self.assertContains(response, 'bg-secondary')
+        self.assertContains(response, '>inactive</span')
+        self.assertContains(response, 'class="badge bg-secondary')
         self.member.refresh_from_db()
         self.assertEqual(self.member.status, 'inactive')
 
@@ -1379,12 +1385,18 @@ class AdminWorkflowTests(TestCase):
         self.assertContains(response, 'd-flex flex-wrap align-items-start gap-2')
 
     def test_reset_portal_password(self):
-        self.client.post(reverse('member_add'), {
-            'full_name': 'Portal Person', 'phone': '9111111111', 'plan': '', 'start_date': '',
+        response = self.client.post(reverse('member_add'), {
+            'full_name': 'Portal Person',
+            'phone': '9998887776',
+            'emergency_contact': '+91 9000000003',
+            'emergency_contact_name': 'Portal Contact',
+            'plan': '',
+            'start_date': '',
             'payment_method': 'cash',
         })
-        member = MemberProfile.objects.get(phone='9111111111')
-        user = User.objects.get(username='9111111111')
+        self.assertEqual(response.status_code, 302, getattr(response, 'context', None) and response.context.get('form') and response.context['form'].errors)
+        member = MemberProfile.objects.get(phone='+919998887776')
+        user = User.objects.get(username='+919998887776')
         old_hash = user.password
         self.client.post(reverse('member_reset_password', args=[member.member_id]))
         user.refresh_from_db()

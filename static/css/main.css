@@ -174,5 +174,39 @@ form input[type=submit]{width:auto}
 .table .btn{white-space:nowrap}
 .card.bg-primary,.card.bg-success,.card.bg-info,.card.bg-warning{border:0;border-radius:var(--radius-lg)}
 
+/* Gym workspace OTP / auth responsive */
+.otp-single-input{width:100%;max-width:100%;font-size:clamp(1.05rem,3.5vw,1.35rem);letter-spacing:.4em;text-align:center;padding:.85rem 1rem}
+.auth-shell,.auth-content,.auth-form-wrap,.auth-visual{min-width:0}
+.auth-form-wrap p,.auth-form-wrap .alert,.auth-form-wrap .form-text,.auth-form-wrap a,.auth-visual h1,.auth-visual p{overflow-wrap:anywhere;word-break:break-word}
+.auth-form-wrap .btn{min-height:48px}
+@media(max-width:991.98px){
+  .auth-shell{grid-template-columns:1fr;min-height:auto}
+  .auth-visual{min-height:auto;padding:2rem 1.25rem}
+  .auth-visual .feature-orb{width:180px;height:180px;margin:1.5rem auto}
+  .auth-content{padding:2rem 1rem 2.5rem;place-items:start center}
+  .auth-form-wrap{width:min(100%,560px)}
+}
+@media(max-width:767.98px){
+  .auth-shell{border-radius:0}
+  .auth-visual{display:flex;gap:.25rem}
+  .auth-visual h1{font-size:clamp(1.65rem,7vw,2.2rem);max-width:none}
+  .auth-visual p{font-size:.95rem;max-width:none}
+  .auth-visual .feature-orb{width:132px;height:132px;margin:1rem auto}
+  .auth-content{padding:1.25rem .9rem calc(1.5rem + env(safe-area-inset-bottom));min-height:auto;place-items:stretch}
+  .auth-form-wrap{width:100%;max-width:none}
+  .auth-form-wrap h2{font-size:1.55rem}
+  .auth-form-wrap .form-control,.auth-form-wrap .otp-single-input{font-size:16px}
+}
+@media(max-width:480px){
+  .auth-visual{padding:1.25rem 1rem}
+  .auth-visual .feature-orb{display:none}
+  .auth-content{padding:1rem .75rem calc(1.25rem + env(safe-area-inset-bottom))}
+  .otp-single-input{font-size:16px;letter-spacing:.22em;padding:.8rem .65rem}
+  .auth-form-wrap .alert{padding:.75rem}
+}
+@supports(padding:max(0px)){
+  .auth-content{padding-left:max(.75rem,env(safe-area-inset-left));padding-right:max(.75rem,env(safe-area-inset-right))}
+}
+
 /* Form widgets rendered directly by Django forms may not carry Bootstrap classes. */
 form input:not([type=hidden]):not([type=checkbox]):not([type=radio]),form select,form textarea{width:100%;border:1px solid #dfe4ec;border-radius:10px;padding:.72rem .85rem;color:var(--ink);font-size:.9rem;background:#fff;max-width:100%}form input:focus,form select:focus,form textarea:focus{outline:0;border-color:#8b85ff;box-shadow:0 0 0 3px #635bff16}form input[type=checkbox],form input[type=radio]{width:1rem;height:1rem;accent-color:var(--brand)}form .form-check input[type=checkbox],form .form-check input[type=radio]{width:1rem;padding:0}form input[type=checkbox]{width:1rem}form input[type=submit]{width:auto}.table .btn{white-space:nowrap}.card.bg-primary,.card.bg-success,.card.bg-info,.card.bg-warning{border:0;border-radius:var(--radius)}
