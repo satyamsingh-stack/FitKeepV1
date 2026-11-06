@@ -8,9 +8,7 @@ class MemberProfile(models.Model):
 
     STATUS_CHOICES = [
         ('active', 'Active'),
-        ('inactive', 'Inactive'),
-        ('paused', 'Paused'),
-        ('cancelled', 'Cancelled'),
+      
         ('expired', 'Expired'),
     ]
 

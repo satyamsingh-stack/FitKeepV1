@@ -44,7 +44,6 @@
                     <th>Member ID</th>
                     <th>Name</th>
                     <th>Phone</th>
-                    <th>Status</th>
                     <th>Membership</th>
                     <th>Actions</th>
                 </tr>
@@ -55,7 +54,6 @@
                     <td><span class="small fw-semibold">{{ member.member_id }}</span></td>
                     <td><div class="d-flex align-items-center"><span class="member-avatar">{{ member.full_name|slice:':1'|upper }}</span><span><strong class="member-name">{{ member.full_name }}</strong><span class="member-meta">{{ member.email|default:"No email added" }}</span></span></div></td>
                     <td>{{ member.phone }}</td>
-                    <td><span class="badge bg-{% if member.status == 'active' %}success{% elif member.status == 'inactive' %}secondary{% elif member.status == 'paused' %}warning{% else %}danger{% endif %}">{{ member.status }}</span></td>
                     <td>
                         {% if member.current_sub %}
                             <span class="badge bg-{% if member.current_sub.status == 'active' %}success{% elif member.current_sub.status == 'yet_to_start' %}info{% else %}secondary{% endif %}">{{ member.current_sub.get_status_display }}</span>
