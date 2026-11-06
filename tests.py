@@ -843,6 +843,17 @@ class ModelTests(TestCase):
         )
         self.assertEqual(subscription.outstanding_balance, 1000)
 
+    def test_member_profile_status_choices_omits_inactive_paused_cancelled(self):
+        expected_choices = [
+            ('active', 'Active'),
+            ('expired', 'Expired'),
+        ]
+        self.assertEqual(list(MemberProfile.STATUS_CHOICES), expected_choices)
+        choices_dict = dict(MemberProfile.STATUS_CHOICES)
+        self.assertNotIn('inactive', choices_dict)
+        self.assertNotIn('paused', choices_dict)
+        self.assertNotIn('cancelled', choices_dict)
+
 
 class MemberOnboardingTests(TestCase):
     """Adding a member should also assign the membership and record the first payment."""
@@ -1008,7 +1019,24 @@ class AdminWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.member.refresh_from_db()
         self.assertEqual(self.member.status, 'inactive')
-        self.assertContains(response, '>inactive</span>')
+        # Status column header and member status badges are removed from member list table
+        self.assertNotContains(response, '<th>Status</th>')
+        self.assertNotContains(response, '>inactive</span>')
+        self.assertNotContains(response, '>paused</span>')
+        self.assertNotContains(response, '>cancelled</span>')
+        # Membership column displays the expired subscription status
+        self.assertContains(response, '<th>Membership</th>')
+        self.assertContains(response, '<span class="badge bg-secondary">Expired</span>')
+
+    def test_member_directory_status_filter_options(self):
+        response = self.client.get(reverse('member_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<option value="active"')
+        self.assertContains(response, '<option value="expired"')
+        self.assertNotContains(response, 'value="inactive"')
+        self.assertNotContains(response, 'value="paused"')
+        self.assertNotContains(response, 'value="cancelled"')
 
     def test_member_detail_shows_inactive_after_membership_expires(self):
         self._sub(self.today - timedelta(days=600), self.today - timedelta(days=500), 'expired')
@@ -1433,6 +1461,53 @@ class AdminWorkflowTests(TestCase):
         response = self.client.get(reverse('subscription_list'))
 
         self.assertContains(response, '9000000001')
+
+    def test_subscription_list_validity_dates_and_days_left_display(self):
+        # 1. Active subscription ending today (days_left == 0) -> "ends today" with text-warning
+        sub = self._sub(self.today - timedelta(days=30), self.today, 'active')
+        response = self.client.get(reverse('subscription_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f'{sub.start_date.strftime("%d %b %Y")} &rarr; {sub.end_date.strftime("%d %b %Y")}',
+        )
+        self.assertContains(response, 'text-warning')
+        self.assertContains(response, 'ends today')
+
+        # 2. Active subscription expiring tomorrow (days_left == 1) -> singular "1 day left" with text-warning
+        sub.end_date = self.today + timedelta(days=1)
+        sub.save()
+        response = self.client.get(reverse('subscription_list'))
+        self.assertContains(response, '1 day left')
+        self.assertNotContains(response, '1 days left')
+        self.assertContains(response, 'text-warning')
+
+        # 3. Active subscription expiring within 7 days (e.g. 7 days left boundary) -> "7 days left" with text-warning
+        sub.end_date = self.today + timedelta(days=7)
+        sub.save()
+        response = self.client.get(reverse('subscription_list'))
+        self.assertContains(response, '7 days left')
+        self.assertContains(response, 'text-warning')
+
+        # 4. Active subscription with > 7 days remaining (e.g. 8 days left boundary) -> "8 days left" with text-muted
+        sub.end_date = self.today + timedelta(days=8)
+        sub.save()
+        response = self.client.get(reverse('subscription_list'))
+        self.assertContains(response, '8 days left')
+        self.assertContains(response, 'text-muted')
+        self.assertNotContains(response, 'text-warning')
+
+        # 5. Non-active subscription (e.g. expired) -> validity dates shown, no days left indicator
+        sub.status = 'expired'
+        sub.end_date = self.today - timedelta(days=5)
+        sub.save()
+        response = self.client.get(reverse('subscription_list'), {'status': 'expired'})
+        self.assertContains(
+            response,
+            f'{sub.start_date.strftime("%d %b %Y")} &rarr; {sub.end_date.strftime("%d %b %Y")}',
+        )
+        self.assertNotContains(response, 'ends today')
+        self.assertNotContains(response, 'left')
 
     def test_subscription_status_filter_only_offers_date_based_statuses(self):
         response = self.client.get(reverse('subscription_list'))
